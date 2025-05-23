@@ -1,0 +1,24 @@
+scoreboard:
+  0: "§b§l[台球厅]" # 作为标题，居中，标号为行数，从0开始，后面即使某一行为空也需要用空字符串
+  1: ""
+  2: "&displayPlayer1" # 开头为&的视为函数方法，在下面的functions中调用
+  3: "&displayPlayer2"
+  4: ""
+  5: "玩家1分数: {score1}" # 玩家当前分数
+  6: "玩家2分数: {score2}"
+  7: ""
+  8: "游玩时间: {lastTime}" # {lastTime}指代从开始游戏到现在的时间差值
+  9: "使用/scb <e/b>来显示/隐藏计分板"
+
+functions: # 给某些显示添加变量，此时需要把上面的文本替换为下面的变量，需要在开头加&作为标识符，颜色应当使用§
+  displayPlayer1:
+    isThisTurn == true: # 当isThisTurn为true时执行操作，isThisTurn方法是是否为当前玩家的回合
+      text: "§a{player1}" # {player1}指代这个玩家的名字
+    isThisTurn == false:
+      text: "§7{player1}"
+
+  displayPlayer2:
+    isThisTurn == true: # 当isThisTurn为true时执行操作，isThisTurn方法是是否为当前玩家的回合
+      text: "§a{player2}" # {player2}指代这个玩家的名字
+    isThisTurn == false:
+      text: "§7{player2}"
