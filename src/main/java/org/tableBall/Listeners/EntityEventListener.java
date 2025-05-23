@@ -48,7 +48,6 @@ public class EntityEventListener implements Listener {
     private final Map<String, BukkitTask> ballInCheckTasks;
 
     public EntityEventListener(TableBall plugin, InGame inGame) {
-
         this.plugin = plugin;
         this.inGame = inGame;
         this.start = new Start(plugin, plugin.getWorldUtils(), inGame);
