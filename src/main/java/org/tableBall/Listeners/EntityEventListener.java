@@ -65,13 +65,23 @@ public class EntityEventListener implements Listener {
                     v.setVelocity(velocities.get(v));
                 }else velocities.put(v, new Vector(0, 0, 0));
             }
-        }, 1, 1);
+        }, 2, 2);
     }
 
     @EventHandler
     public void onBoatBlockCollision(VehicleBlockCollisionEvent e){
+        plugin.getLogger().info("Collision "+e.getBlock().getType());
         if(velocities.containsValue(e.getVehicle())){
-            velocities.put(e.getVehicle(), new Vector(0, 0, 0));
+            Vector v = velocities.get(e.getVehicle());
+            if(e.getBlock().getType()==Material.SPRUCE_PLANKS) {
+                v = new Vector(v.getX(), 0, -v.getZ());
+            }else if(e.getBlock().getType()==Material.DARK_OAK_PLANKS){
+                v = new Vector(-v.getX(), 0, v.getZ());
+            }else if(e.getBlock().getType()==Material.DARK_OAK_LOG || e.getBlock().getType()==Material.SPRUCE_LOG){
+                v = new Vector(0, 0, 0);
+            }
+            velocities.put(e.getVehicle(), v.multiply(0.95));
+            e.getVehicle().setVelocity(velocities.get(e.getVehicle()));
         }
     }
 
@@ -92,8 +102,8 @@ public class EntityEventListener implements Listener {
         }
 
         if (pusher instanceof Boat pusherV && bePushedEntity instanceof Boat pushedV) {
-            Vector v1 = velocities.get(pusherV);
-            Vector v2 = velocities.get(pushedV);
+            Vector v1 = pusherV.getVelocity();
+            Vector v2 = pushedV.getVelocity();
             Vector l1 = pusher.getLocation().toVector(), l2 = bePushedEntity.getLocation().toVector();
             double theta1 = v1.angle(l2.subtract(l1)), theta2 = v2.angle(l1.subtract(l2));
             if(Double.isNaN(theta1)) theta1=0;
@@ -102,10 +112,14 @@ public class EntityEventListener implements Listener {
             Vector v2x = v2.multiply(Math.cos(theta2)), v2y = v2.multiply(Math.sin(theta2));
             Vector v1f = v1y.add(v2x), v2f = v2y.add(v1x);
 
-            plugin.getLogger().info(v1+"; "+v2+"; "+theta1+"; "+theta2+"; "+v1f+"; "+v2f);
+            plugin.getLogger().info(v1.length()+"; "+v2.length()+"; "+theta1+"; "+theta2+"; "+v1f.length()+"; "+v2f.length());
 
+//            pusherV.setVelocity(v1f);
+//            pushedV.setVelocity(v2f);
             velocities.put(pusherV, v1f);
             velocities.put(pushedV, v2f);
+            pusherV.setVelocity(velocities.get(pusherV));
+            pushedV.setVelocity(velocities.get(pushedV));
 
             e.setCancelled(true);
             return;
@@ -128,8 +142,8 @@ public class EntityEventListener implements Listener {
 
         // 检查是否是当前玩家的回合
         if (plugin.getRoundManager().isCurrentPlayer(worldName, player)) {
-            //plugin.getLogger().info("是" + player.getName() + "的回合，伤害设为0.01 L83");
-            event.setDamage(0.01);
+            //plugin.getLogger().info("是" + player.getName() + "的回合，伤害设为0 L83");
+            event.setDamage(0);
         } else {
             //plugin.getLogger().info("不是" + player.getName() + "的回合，取消事件 L86");
             event.setCancelled(true);
