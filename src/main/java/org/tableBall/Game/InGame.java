@@ -8,6 +8,7 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Boat;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -16,7 +17,10 @@ import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.util.BoundingBox;
 import org.bukkit.util.Vector;
+import org.tableBall.Listeners.EntityEventListener;
+import org.tableBall.Manager.RoundManager;
 import org.tableBall.TableBall;
 import org.bukkit.NamespacedKey;
 
@@ -194,10 +198,12 @@ public class InGame {
                 plugin.getLogger().severe("船实体生成失败！");
                 return;
             }
+            EntityEventListener.velocities.put(boat, new Vector(0, 0, 0));
             
             //plugin.getLogger().info("船实体生成成功，正在设置NBT数据...");
-            
-            // 设置NBT数据
+//            BoundingBox box = boat.getBoundingBox();
+//            boat.wouldCollideUsing(box.resize(-0.1, -0.1, -0.1, 0.1, 0.1, 0.1));
+
             PersistentDataContainer container = boat.getPersistentDataContainer();
             container.set(TableBall.BALL_ID_KEY, PersistentDataType.INTEGER, Integer.parseInt(ballId));
             container.set(TableBall.BALL_WORLD_KEY, PersistentDataType.STRING, worldName);
@@ -268,18 +274,6 @@ public class InGame {
             default:
                 return null;
         }
-    }
-
-    /**
-     * 获取指定球的ID
-     * @param boat 球实体
-     * @return 球ID，如果不是球则返回-1
-     */
-    public int getBallId(Boat boat) {
-        if (boat == null) return -1;
-        PersistentDataContainer container = boat.getPersistentDataContainer();
-        Integer id = container.get(TableBall.BALL_ID_KEY, PersistentDataType.INTEGER);
-        return id != null ? id : -1;
     }
 
     /**
@@ -750,10 +744,10 @@ public class InGame {
             public void run() {
                 boolean allStatic = true;
                 for (Boat ball : plugin.getServer().getWorld(worldName).getEntitiesByClass(Boat.class)) {
-                    if (ball.getVelocity().length() > 0.1) {
+                    if (ball.getVelocity().length() > 0.01) {
                         allStatic = false;
                         break;
-                    } else if (ball.getVelocity().length() <= 0.1) {
+                    } else if (ball.getVelocity().length() <= 0.01) {
                         ball.setVelocity(new Vector(0, 0, 0));
                     }
                 }
@@ -769,8 +763,10 @@ public class InGame {
                         }
                     }
                     // 切换回合
-                    plugin.getRoundManager().endTurn(worldName);
-                    plugin.getRoundManager().startTurn(worldName);
+                    plugin.getRoundManager().settleTurn(worldName);
+                    EntityEventListener.hitBall.put(worldName, false);
+//                    plugin.getRoundManager().endTurn(worldName);
+//                    plugin.getRoundManager().startTurn(worldName);
                     // 如果白球进洞，给下一个玩家一个母球
                     if (whiteBallInHole) {
                         Player nextPlayer = plugin.getRoundManager().getCurrentPlayer(worldName);

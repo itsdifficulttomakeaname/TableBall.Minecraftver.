@@ -32,6 +32,31 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
                 <version>3.5.3</version>
+                <configuration>
+                    <filters>
+                        <filter>
+                            <artifact>*.*</artifact>
+                            <excludes>
+                                <exclude>classpath.index</exclude>
+                                <exclude>META-INF/**</exclude>
+                                <exclude>LICENSE.txt</exclude>
+                            </excludes>
+                        </filter>
+                        <filter>
+                            <artifact>*:*</artifact>
+                            <excludeDefaults>false</excludeDefaults>
+                            <includes>
+                                <include>net/wesjd/anvilgui/**</include>
+                            </includes>
+                        </filter>
+                    </filters>
+                    <relocations>
+                        <relocation>
+                            <pattern>cn.jason31416.planetlib</pattern>
+                            <shadedPattern>cn.jason31416.betterAirport.planetlib</shadedPattern>
+                        </relocation>
+                    </relocations>
+                </configuration>
                 <executions>
                     <execution>
                         <phase>package</phase>
@@ -63,6 +88,10 @@
             <id>OnARandomBox</id>
             <url>https://repo.onarandombox.com/content/groups/public/</url>
         </repository>
+        <repository>
+            <id>jitpack.io</id>
+            <url>https://jitpack.io</url>
+        </repository>
     </repositories>
 
     <dependencies>
@@ -82,6 +111,12 @@
             <groupId>net.kyori</groupId>
             <artifactId>adventure-api</artifactId>
             <version>4.21.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.github.jason31416</groupId>
+            <artifactId>planetlib</artifactId>
+            <version>1.2.3</version>
+            <scope>compile</scope>
         </dependency>
     </dependencies>
 </project>

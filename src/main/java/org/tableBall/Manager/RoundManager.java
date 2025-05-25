@@ -49,13 +49,14 @@ public class RoundManager {
         currentPlayer.setGameMode(GameMode.SURVIVAL);
         currentPlayer.removePotionEffect(PotionEffectType.INVISIBILITY);
         currentPlayer.setAllowFlight(true);
-        currentPlayer.setFlying(false);
-        currentPlayer.setCollidable(true);
+        currentPlayer.setFlying(true);
         currentPlayer.sendMessage("§a轮到你的回合了！");
         currentPlayer.sendMessage("§e你只能击打母球！");
 
         // 设置其他玩家为冒险模式
         for (Player player : gameState.getPlayers()) {
+            currentPlayer.setCollidable(false);
+
             if (!player.equals(currentPlayer)) {
                 setSpectatorMode(player);
             }
@@ -97,11 +98,10 @@ public class RoundManager {
         GameState gameState = gameStates.get(worldName);
         if (gameState == null) return;
 
+        plugin.getLogger().info("handleBallIn: "+worldName+" "+isWhiteBall);
+
         if (isWhiteBall) {
             gameState.setWhiteBallIn(true);
-            // 给下一个玩家一艘船
-            Player nextPlayer = gameState.getNextPlayer();
-            nextPlayer.getInventory().setItem(3, new ItemStack(Material.OAK_BOAT));
         } else {
             gameState.setHasScored(true);
             gameState.incrementBallsInHole();
@@ -109,27 +109,16 @@ public class RoundManager {
     }
 
     /**
-     * 检查球是否停止
-     * @param worldName 世界名称
-     * @param ballVelocity 球的速度
-     */
-    public void checkBallStop(String worldName, double ballVelocity) {
-        GameState gameState = gameStates.get(worldName);
-        if (gameState == null || !gameState.isWaitingForBallsToStop() || ballVelocity >= 0.1) return;
-
-        // 所有球都停止了，结算回合
-        settleTurn(worldName);
-    }
-
-    /**
      * 结算回合
      * @param worldName 世界名称
      */
-    private void settleTurn(String worldName) {
+    public void settleTurn(String worldName) {
         GameState gameState = gameStates.get(worldName);
         if (gameState == null) return;
 
         gameState.setWaitingForBallsToStop(false);
+
+        //plugin.getLogger().info("settleTurn: "+gameState.isWhiteBallIn()+" "+gameState.hasScored());
 
         if (gameState.isWhiteBallIn()) {
             // 母球进洞，切换回合

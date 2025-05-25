@@ -1,5 +1,6 @@
 package org.tableBall;
 
+import cn.jason31416.planetlib.PlanetLib;
 import org.bukkit.NamespacedKey;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.tableBall.Commands.*;
@@ -26,6 +27,8 @@ public final class TableBall extends JavaPlugin {
 
     @Override
     public void onEnable() {
+        PlanetLib.initialize(this);
+
         // 保存默认配置
         saveDefaultConfig();
         saveResource("balls.yml", false);

@@ -1,5 +1,6 @@
 package org.tableBall.Listeners;
 
+import cn.jason31416.planetlib.PlanetLib;
 import io.papermc.paper.event.entity.EntityPushedByEntityAttackEvent;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
@@ -7,9 +8,11 @@ import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Boat;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Vehicle;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
@@ -46,6 +49,8 @@ public class EntityEventListener implements Listener {
     private final Start start;
     private final Map<String, BukkitTask> movementCheckTasks;
     private final Map<String, BukkitTask> ballInCheckTasks;
+    public static final Map<String, Boolean> hitBall = new HashMap<>();
+    public static final Map<Vehicle, Vector> velocities = new HashMap<>();
 
     public EntityEventListener(TableBall plugin, InGame inGame) {
         this.plugin = plugin;
@@ -53,6 +58,27 @@ public class EntityEventListener implements Listener {
         this.start = new Start(plugin, plugin.getWorldUtils(), inGame);
         this.movementCheckTasks = new HashMap<>();
         this.ballInCheckTasks = new HashMap<>();
+
+        PlanetLib.getScheduler().runTimer(t->{
+            for(Vehicle v: velocities.keySet()){
+                if(velocities.containsKey(v)) {
+                    v.setVelocity(velocities.get(v));
+                }else velocities.put(v, new Vector(0, 0, 0));
+            }
+        }, 1, 1);
+    }
+
+    @EventHandler
+    public void onBoatBlockCollision(VehicleBlockCollisionEvent e){
+        if(velocities.containsValue(e.getVehicle())){
+            velocities.put(e.getVehicle(), new Vector(0, 0, 0));
+        }
+    }
+
+    @EventHandler
+    public void onBoatDestroyed(VehicleDestroyEvent e){
+        Vehicle boat=e.getVehicle();
+        velocities.remove(boat);
     }
 
     @EventHandler
@@ -62,15 +88,32 @@ public class EntityEventListener implements Listener {
 
         if (pusher instanceof Player && bePushedEntity instanceof Boat) {
             e.setCancelled(true);
+            return;
         }
 
-        if (pusher instanceof Boat && bePushedEntity instanceof Boat){
+        if (pusher instanceof Boat pusherV && bePushedEntity instanceof Boat pushedV) {
+            Vector v1 = velocities.get(pusherV);
+            Vector v2 = velocities.get(pushedV);
+            Vector l1 = pusher.getLocation().toVector(), l2 = bePushedEntity.getLocation().toVector();
+            double theta1 = v1.angle(l2.subtract(l1)), theta2 = v2.angle(l1.subtract(l2));
+            if(Double.isNaN(theta1)) theta1=0;
+            if(Double.isNaN(theta2)) theta2=0;
+            Vector v1x = v1.multiply(Math.cos(theta1)), v1y = v1.multiply(Math.sin(theta1));
+            Vector v2x = v2.multiply(Math.cos(theta2)), v2y = v2.multiply(Math.sin(theta2));
+            Vector v1f = v1y.add(v2x), v2f = v2y.add(v1x);
 
+            plugin.getLogger().info(v1+"; "+v2+"; "+theta1+"; "+theta2+"; "+v1f+"; "+v2f);
+
+            velocities.put(pusherV, v1f);
+            velocities.put(pushedV, v2f);
+
+            e.setCancelled(true);
+            return;
         }
     }
 
-    @EventHandler
-    public void onVehicleMove(VehicleMoveEvent e){}
+//    @EventHandler
+//    public void onVehicleMove(VehicleMoveEvent e){}
 
     @EventHandler
     public void onEntityDamageByEntity(VehicleDamageEvent event) {
@@ -85,10 +128,10 @@ public class EntityEventListener implements Listener {
 
         // 检查是否是当前玩家的回合
         if (plugin.getRoundManager().isCurrentPlayer(worldName, player)) {
-            plugin.getLogger().info("是" + player.getName() + "的回合，伤害设为0.01 L83");
+            //plugin.getLogger().info("是" + player.getName() + "的回合，伤害设为0.01 L83");
             event.setDamage(0.01);
         } else {
-            plugin.getLogger().info("不是" + player.getName() + "的回合，取消事件 L86");
+            //plugin.getLogger().info("不是" + player.getName() + "的回合，取消事件 L86");
             event.setCancelled(true);
             return;
         }
@@ -96,135 +139,25 @@ public class EntityEventListener implements Listener {
         // 检查是否是母球
         Boat motherBall = plugin.getInGame().getMotherBall(worldName);
         if (motherBall != null && motherBall.equals(entity)) {
+            if(hitBall.getOrDefault(plugin.getInGame().getBallWorld(motherBall), false)){
+                return;
+            }
+
+            event.setCancelled(true);
+            hitBall.put(plugin.getInGame().getBallWorld(motherBall), true);
+
+            velocities.put(motherBall, motherBall.getLocation().toVector().subtract(player.getLocation().toVector()).setY(0).normalize().multiply(player.getInventory().getItemInMainHand().getEnchantmentLevel(Enchantment.KNOCKBACK)+1));
+
             // 处理击球事件
             plugin.getRoundManager().handleShot(worldName, player);
             // 更新球的物理状态
             plugin.getInGame().updateBallPhysics((Boat) entity);
             // 检查所有球是否静止
             plugin.getInGame().checkAllBallsStatic(worldName);
-            // 开始检查球进洞
-            startBallInCheck(worldName);
         } else {
             player.sendMessage("你不可以打除了母球以外的球!");
             event.setCancelled(true);
         }
-    }
-
-    /**
-     * 开始检查球进洞
-     * @param worldName 世界名称
-     */
-    public void startBallInCheck(String worldName) {
-        // 取消现有的检查任务
-        if (ballInCheckTasks.containsKey(worldName)) {
-            ballInCheckTasks.get(worldName).cancel();
-        }
-
-        // 开始新的检查任务
-        BukkitTask task = new BukkitRunnable() {
-            @Override
-            public void run() {
-                World world = Bukkit.getWorld(worldName);
-                if (world == null) {
-                    this.cancel();
-                    ballInCheckTasks.remove(worldName);
-                    return;
-                }
-
-                // 检查所有球
-                for (Entity entity : world.getEntities()) {
-                    if (entity instanceof Boat) {
-                        Boat boat = (Boat) entity;
-                        // 检查是否进洞
-                        if (isBallInHole(boat)) {
-                            handleBallIn(boat);
-                        }
-                    }
-                }
-            }
-        }.runTaskTimer(plugin, 5L, 5L); // 每0.25秒检查一次
-
-        ballInCheckTasks.put(worldName, task);
-    }
-
-    /**
-     * 检查球是否进洞
-     * @param boat 球
-     * @return 是否进洞
-     */
-    private boolean isBallInHole(Boat boat) {
-        String worldName = boat.getWorld().getName();
-        Location ballLoc = boat.getLocation();
-        
-        // 从配置文件获取洞的位置
-        ConfigurationSection holesConfig = plugin.getConfig().getConfigurationSection("worlds." + worldName + ".holes");
-        if (holesConfig == null) return false;
-
-        // 检查每个洞
-        for (String holeId : holesConfig.getKeys(false)) {
-            ConfigurationSection holeConfig = holesConfig.getConfigurationSection(holeId);
-            if (holeConfig == null) continue;
-
-            // 获取洞的判定区域
-            double x1 = holeConfig.getDouble("x1");
-            double y1 = holeConfig.getDouble("y1");
-            double z1 = holeConfig.getDouble("z1");
-            double x2 = holeConfig.getDouble("x2");
-            double y2 = holeConfig.getDouble("y2");
-            double z2 = holeConfig.getDouble("z2");
-
-            // 检查球是否在洞的判定区域内
-            if (isInRange(ballLoc.getX(), x1, x2) &&
-                isInRange(ballLoc.getY(), y1, y2) &&
-                isInRange(ballLoc.getZ(), z1, z2)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * 检查值是否在范围内
-     * @param value 要检查的值
-     * @param min 最小值
-     * @param max 最大值
-     * @return 是否在范围内
-     */
-    private boolean isInRange(double value, double min, double max) {
-        return value >= Math.min(min, max) && value <= Math.max(min, max);
-    }
-
-    /**
-     * 处理球进洞事件
-     * @param entity 进洞的球
-     */
-    public void handleBallIn(Entity entity) {
-        String worldName = entity.getWorld().getName();
-        PersistentDataContainer data = entity.getPersistentDataContainer();
-
-        if (data.has(TableBall.BALL_ID_KEY, PersistentDataType.STRING)) {
-            String ballId = data.get(TableBall.BALL_ID_KEY, PersistentDataType.STRING);
-            if (ballId != null) {
-                // 处理进球事件
-                plugin.getRoundManager().handleBallIn(worldName, ballId.equals("white"));
-                // 移除球
-                entity.remove();
-            }
-        }
-    }
-
-    /**
-     * 检查球是否停止
-     * @param entity 要检查的球
-     */
-    public void checkBallStop(Entity entity) {
-        String worldName = entity.getWorld().getName();
-        double velocity = entity.getVelocity().length();
-        if (velocity < 0.1) {
-            // 更新球的物理状态
-            plugin.getInGame().updateBallPhysics((Boat) entity);
-        }
-        plugin.getRoundManager().checkBallStop(worldName, velocity);
     }
 
     @SuppressWarnings("deprecation")
@@ -278,11 +211,14 @@ public class EntityEventListener implements Listener {
         // 生成母球船实体
         Location loc = event.getClickedBlock().getLocation().add(0.5, 1, 0.5);
         Boat boat = player.getWorld().spawn(loc, Boat.class);
+        EntityEventListener.velocities.put(boat, new Vector(0, 0, 0));
         boat.setBoatType(Boat.Type.BIRCH);
         boat.setCustomName("§f母球");
         boat.setCustomNameVisible(true);
         boat.getPersistentDataContainer().set(org.tableBall.TableBall.BALL_ID_KEY, PersistentDataType.INTEGER, 0);
         boat.getPersistentDataContainer().set(org.tableBall.TableBall.BALL_WORLD_KEY, PersistentDataType.STRING, player.getWorld().getName());
+        plugin.getInGame().setMotherBall(inGame.getBallWorld(boat), boat);
+
         // 移除物品
         item.setAmount(item.getAmount() - 1);
         player.sendMessage("§a已成功放置母球！");

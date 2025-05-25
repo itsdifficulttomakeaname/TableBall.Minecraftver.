@@ -52,35 +52,31 @@ public class LeaveCommand implements CommandExecutor {
                 worldPlayer.setAllowFlight(false);
                 worldPlayer.setFlying(false);
                 // 展示结算信息
-                if (plugin.getInGame().isPlayerInGame(worldPlayer)) {
-                    int score = plugin.getInGame().getScore(worldPlayer);
-                    String gameType = plugin.getInGame().getGameType(worldPlayer);
-                    worldPlayer.sendMessage("§e本局结算：");
-                    for (Player p : plugin.getInGame().getPlayersInWorld(currentWorld.getName())) {
-                        int s = plugin.getInGame().getScore(p);
-                        worldPlayer.sendMessage("§b" + p.getName() + "§f 得分: §a" + s);
-                    }
-                    // 判定胜负
-                    int maxScore = -1;
-                    List<Player> winners = new java.util.ArrayList<>();
-                    for (Player p : plugin.getInGame().getPlayersInWorld(currentWorld.getName())) {
-                        int s = plugin.getInGame().getScore(p);
-                        if (s > maxScore) {
-                            maxScore = s;
-                            winners.clear();
-                            winners.add(p);
-                        } else if (s == maxScore) {
-                            winners.add(p);
-                        }
-                    }
-                    if (winners.size() == 1) {
-                        worldPlayer.sendMessage("§6获胜者: " + winners.get(0).getName() + " §e得分: " + maxScore);
-                    } else {
-                        worldPlayer.sendMessage("§6平局！§e得分: " + maxScore);
-                    }
-                    // 彻底移除玩家，释放世界占用
-                    plugin.getInGame().removePlayer(worldPlayer);
+                worldPlayer.sendMessage("§e本局结算：");
+                for (Player p : plugin.getInGame().getPlayersInWorld(currentWorld.getName())) {
+                    int s = plugin.getInGame().getScore(p);
+                    worldPlayer.sendMessage("§b" + p.getName() + "§f 得分: §a" + s);
                 }
+                // 判定胜负
+                int maxScore = -1;
+                List<Player> winners = new java.util.ArrayList<>();
+                for (Player p : plugin.getInGame().getPlayersInWorld(currentWorld.getName())) {
+                    int s = plugin.getInGame().getScore(p);
+                    if (s > maxScore) {
+                        maxScore = s;
+                        winners.clear();
+                        winners.add(p);
+                    } else if (s == maxScore) {
+                        winners.add(p);
+                    }
+                }
+                if (winners.size() == 1) {
+                    worldPlayer.sendMessage("§6获胜者: " + winners.get(0).getName() + " §e得分: " + maxScore);
+                } else {
+                    worldPlayer.sendMessage("§6平局！§e得分: " + maxScore);
+                }
+                // 彻底移除玩家，释放世界占用
+                plugin.getInGame().removePlayer(worldPlayer);
                 worldPlayer.sendMessage("§a你已被传送回主城！");
             } else {
                 worldPlayer.sendMessage("§c主城世界不存在！");
