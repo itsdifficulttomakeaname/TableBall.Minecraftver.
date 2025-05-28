@@ -3,7 +3,9 @@ package org.tableBall;
 import cn.jason31416.planetlib.PlanetLib;
 import org.bukkit.NamespacedKey;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitRunnable;
 import org.tableBall.Commands.*;
+import org.tableBall.Entity.DisplayBall;
 import org.tableBall.Game.InGame;
 import org.tableBall.Game.End;
 import org.tableBall.Manager.RoundManager;
@@ -37,7 +39,7 @@ public final class TableBall extends JavaPlugin {
         // 初始化管理器
         this.worldUtils = new WorldUtils(this);
         this.scoreBoardManager = new ScoreBoardManager(this);
-        this.inGame = new InGame(this);
+        this.inGame = new InGame(this, worldUtils);
         this.end = new End(this, scoreBoardManager);
         this.roundManager = new RoundManager(this);
 
@@ -58,6 +60,13 @@ public final class TableBall extends JavaPlugin {
         EntityEventListener entityEventListener = new EntityEventListener(this, inGame);
         getServer().getPluginManager().registerEvents(entityEventListener, this);
         setEntityEventListener(entityEventListener);
+
+        DisplayBall.plugin = this;
+
+        // 注册桌球物理管理器
+        PlanetLib.getScheduler().runTimer(t->{
+            DisplayBall.displayBalls.forEach(DisplayBall::updateMovement);
+        }, 1, 1);
 
         getLogger().info("TableBall 插件已启用！");
     }

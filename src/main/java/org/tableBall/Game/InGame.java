@@ -4,6 +4,7 @@ import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -17,26 +18,35 @@ import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.BoundingBox;
 import org.bukkit.util.Vector;
 import org.tableBall.Listeners.EntityEventListener;
 import org.tableBall.Manager.RoundManager;
 import org.tableBall.TableBall;
 import org.bukkit.NamespacedKey;
+import org.tableBall.Entity.DisplayBall;
+import org.tableBall.Utils.WorldUtils;
 
 import java.io.File;
 import java.util.*;
 
 public class InGame {
     private final TableBall plugin;
+    private final WorldUtils worldUtils;
     public final Map<String, Map<String, BallData>> worldBalls;
     private final Map<String, Map<String, HoleData>> worldHoles;
     public final Map<String, GameData> gameDataMap; // 世界 -> 游戏数据
-    private FileConfiguration ballsConfig;
-    private final Map<String, Boat> motherBalls = new HashMap<>();
+    public FileConfiguration ballsConfig;
+    private final Map<String, Set<Player>> playersInGame = new HashMap<>();
+    private final Map<String, Set<DisplayBall>> balls = new HashMap<>();
+    private final Map<String, DisplayBall> motherBalls = new HashMap<>();
+    private final Map<String, BukkitTask> movementCheckTasks = new HashMap<>();
+    private final Map<String, BukkitTask> ballInCheckTasks = new HashMap<>();
 
-    public InGame(TableBall plugin) {
+    public InGame(TableBall plugin, WorldUtils worldUtils) {
         this.plugin = plugin;
+        this.worldUtils = worldUtils;
         this.worldBalls = new HashMap<>();
         this.worldHoles = new HashMap<>();
         this.gameDataMap = new HashMap<>();
@@ -101,11 +111,7 @@ public class InGame {
                     plugin.getLogger().severe("球 " + ballKey + " 缺少NBT配置！");
                     continue;
                 }
-                Map<String, Object> nbt = new HashMap<>();
-                for (String key : nbtSection.getKeys(false)) {
-                    nbt.put(key, nbtSection.get(key));
-                }
-                balls.put(ballKey, new BallData(loc, nbt));
+                balls.put(ballKey, new BallData(loc, Material.getMaterial(nbtSection.getString("color", "STONE"))));
                 //plugin.getLogger().info("成功加载球 ID: " + ballKey);
             }
             worldBalls.put(worldName, balls);
@@ -185,60 +191,15 @@ public class InGame {
      * @param ballData 球数据
      */
     private void spawnBall(String worldName, String ballId, BallData ballData) {
-        Location loc = ballData.getLocation();
+        Location loc = ballData.location();
         if (loc.getWorld() == null) {
             plugin.getLogger().severe("世界不存在：" + worldName);
             return;
         }
 
         try {
-            // 生成船实体
-            Boat boat = (Boat) loc.getWorld().spawnEntity(loc, EntityType.BOAT);
-            if (boat == null) {
-                plugin.getLogger().severe("船实体生成失败！");
-                return;
-            }
-            EntityEventListener.velocities.put(boat, new Vector(0, 0, 0));
-            
-            //plugin.getLogger().info("船实体生成成功，正在设置NBT数据...");
-//            BoundingBox box = boat.getBoundingBox();
-//            boat.wouldCollideUsing(box.resize(-0.1, -0.1, -0.1, 0.1, 0.1, 0.1));
-
-            PersistentDataContainer container = boat.getPersistentDataContainer();
-            container.set(TableBall.BALL_ID_KEY, PersistentDataType.INTEGER, Integer.parseInt(ballId));
-            container.set(TableBall.BALL_WORLD_KEY, PersistentDataType.STRING, worldName);
-
-            // 应用其他NBT属性
-            Map<String, Object> nbt = ballData.getNbt();
-            if (nbt.containsKey("Type")) {
-                String type = nbt.get("Type").toString();
-                try {
-                    boat.setBoatType(Boat.Type.valueOf(type.toUpperCase()));
-                    //plugin.getLogger().info("设置船类型: " + type);
-                } catch (IllegalArgumentException e) {
-                    plugin.getLogger().warning("无效的船类型: " + type + "，使用默认类型");
-                }
-            }
-            if (nbt.containsKey("Invulnerable")) {
-                boolean invulnerable = Boolean.parseBoolean(nbt.get("Invulnerable").toString());
-                boat.setInvulnerable(invulnerable);
-                //plugin.getLogger().info("设置无敌状态: " + invulnerable);
-            }
-            if (nbt.containsKey("CustomName")) {
-                String customName = nbt.get("CustomName").toString();
-                boat.customName(Component.text(customName));
-                //plugin.getLogger().info("设置自定义名称: " + customName);
-            }
-            if (nbt.containsKey("CustomNameVisible")) {
-                boolean visible = Boolean.parseBoolean(nbt.get("CustomNameVisible").toString());
-                boat.setCustomNameVisible(visible);
-                //plugin.getLogger().info("设置名称可见: " + visible);
-            }
-
-            // 判断是否为母球
-            if (isMotherBallKey(ballId)) {
-                setMotherBall(worldName, boat);
-            }
+            DisplayBall ball = new DisplayBall(loc, ballData.material(), "球" + ballId, isMotherBallKey(ballId));
+            addBall(worldName, ball);
 
             //plugin.getLogger().info("球 ID: " + ballId + " 生成完成！");
         } catch (Exception e) {
@@ -249,58 +210,19 @@ public class InGame {
     }
 
     /**
-     * 获取指定球的NBT值
-     * @param boat 球实体
-     * @param key NBT键
-     * @return NBT值，如果不存在则返回null
-     */
-    public Object getBallNbt(Boat boat, String key) {
-        if (boat == null) return null;
-        PersistentDataContainer container = boat.getPersistentDataContainer();
-        
-        switch (key) {
-            case "ball_id":
-                return container.get(TableBall.BALL_ID_KEY, PersistentDataType.INTEGER);
-            case "ball_world":
-                return container.get(TableBall.BALL_WORLD_KEY, PersistentDataType.STRING);
-            case "CustomName":
-                return boat.customName();
-            case "CustomNameVisible":
-                return boat.isCustomNameVisible();
-            case "Type":
-                return boat.getBoatType();
-            case "Invulnerable":
-                return boat.isInvulnerable();
-            default:
-                return null;
-        }
-    }
-
-    /**
-     * 获取指定球所属的世界
-     * @param boat 球实体
-     * @return 世界名称，如果不是球则返回null
-     */
-    public String getBallWorld(Boat boat) {
-        if (boat == null) return null;
-        PersistentDataContainer container = boat.getPersistentDataContainer();
-        return container.get(TableBall.BALL_WORLD_KEY, PersistentDataType.STRING);
-    }
-
-    /**
      * 检查球是否在洞内
-     * @param boat 球实体
+     * @param ball 球实体
      * @return 是否在洞内
      */
-    public boolean isBallInHole(Boat boat) {
-        if (boat == null) return false;
-        String worldName = getBallWorld(boat);
+    public boolean isBallInHole(DisplayBall ball) {
+        if (ball == null) return false;
+        String worldName = ball.getWorld();
         if (worldName == null) return false;
 
         Map<String, HoleData> holes = worldHoles.get(worldName);
         if (holes == null) return false;
 
-        Location ballLoc = boat.getLocation();
+        Location ballLoc = ball.location;
         for (HoleData hole : holes.values()) {
             if (isLocationInHole(ballLoc, hole)) {
                 return true;
@@ -337,61 +259,53 @@ public class InGame {
                loc.getZ() >= minZ && loc.getZ() <= maxZ;
     }
 
-    /**
-     * 开始新游戏
-     * @param worldName 世界名称
-     * @param players 玩家列表
-     * @param gameType 游戏类型（Standard/Custom）
-     */
-    public void startGame(String worldName, List<Player> players, String gameType) {
-        plugin.getLogger().info("开始新游戏 - 世界: " + worldName + ", 类型: " + gameType);
-        plugin.getLogger().info("玩家数量: " + players.size());
+    private void startMovementCheck(String worldName) {
+        BukkitTask task = new BukkitRunnable() {
+            @Override
+            public void run() {
+                checkAllBallsStatic(worldName);
+            }
+        }.runTaskTimer(plugin, 0L, 20L);
+        movementCheckTasks.put(worldName, task);
+    }
 
-        // 创建游戏数据
-        GameData gameData = new GameData(players, gameType);
-        gameDataMap.put(worldName, gameData);
+    private void startBallInCheck(String worldName) {
+        BukkitTask task = new BukkitRunnable() {
+            @Override
+            public void run() {
+                checkBallsInHoles(worldName);
+            }
+        }.runTaskTimer(plugin, 0L, 20L);
+        ballInCheckTasks.put(worldName, task);
+    }
 
-        // 生成球
-        plugin.getLogger().info("正在生成球...");
-        if (!worldBalls.containsKey(worldName)) {
-            plugin.getLogger().severe("世界 " + worldName + " 没有球的数据！");
-            return;
-        }
-        Map<String, BallData> balls = worldBalls.get(worldName);
-        plugin.getLogger().info("找到 " + balls.size() + " 个球的配置");
-        for (Map.Entry<String, BallData> entry : balls.entrySet()) {
-            plugin.getLogger().info("正在生成球 ID: " + entry.getKey());
-            spawnBall(worldName, entry.getKey(), entry.getValue());
-        }
+    public void checkAllBallsStatic(String worldName) {
+        Set<DisplayBall> worldBalls = balls.get(worldName);
+        if (worldBalls == null) return;
 
-        // 传送玩家到母球（或0号球）位置
-        Location tpLoc = null;
-        for (String key : balls.keySet()) {
-            if (isMotherBallKey(key)) {
-                tpLoc = balls.get(key).getLocation();
+        boolean allStatic = true;
+        for (DisplayBall ball : worldBalls) {
+            if (ball.velocity.length() > 0.5) {
+                allStatic = false;
                 break;
             }
         }
-        if (tpLoc == null) {
-            tpLoc = plugin.getWorldUtils().getWorldSpawn(worldName);
+
+        if (allStatic) {
+            plugin.getRoundManager().settleTurn(worldName);
         }
-        for (Player player : players) {
-            if (tpLoc != null) {
-                player.teleport(tpLoc);
+    }
+
+    public void checkBallsInHoles(String worldName) {
+        Set<DisplayBall> worldBalls = balls.get(worldName);
+        if (worldBalls == null) return;
+
+        for (DisplayBall ball : new HashSet<>(worldBalls)) {
+            if (isBallInHole(ball)) {
+                removeBall(worldName, ball);
+                ball.destroy();
             }
         }
-
-        // 通知玩家
-        for (Player player : players) {
-            player.sendMessage("§a游戏开始！类型: " + gameType);
-            if (gameType.equals("Standard")) {
-                player.sendMessage("§e标准模式：每打进一个球得2分");
-            } else {
-                player.sendMessage("§e自定义模式：使用 /addscore 命令添加分数");
-            }
-        }
-
-        plugin.getLogger().info("游戏初始化完成！");
     }
 
     /**
@@ -497,12 +411,9 @@ public class InGame {
      * @return 是否在游戏中
      */
     public boolean isPlayerInGame(Player player) {
-        for (GameData gameData : gameDataMap.values()) {
-            if (gameData.getPlayers().contains(player)) {
-                return true;
-            }
-        }
-        return false;
+        String worldName = player.getWorld().getName();
+        Set<Player> players = playersInGame.get(worldName);
+        return players != null && players.contains(player);
     }
 
     /**
@@ -511,11 +422,12 @@ public class InGame {
      */
     public void removePlayer(Player player) {
         String worldName = player.getWorld().getName();
-        if (gameDataMap.containsKey(worldName)) {
-            GameData gameData = gameDataMap.get(worldName);
-            gameData.getPlayers().remove(player);
-            if (gameData.getPlayers().isEmpty()) {
-                gameDataMap.remove(worldName);
+        Set<Player> players = playersInGame.get(worldName);
+        if (players != null) {
+            players.remove(player);
+            if (players.isEmpty()) {
+                playersInGame.remove(worldName);
+                clearBalls(worldName);
             }
         }
     }
@@ -625,22 +537,7 @@ public class InGame {
     /**
      * 球数据内部类
      */
-    public static class BallData {
-        private final Location location;
-        private final Map<String, Object> nbt;
-
-        public BallData(Location location, Map<String, Object> nbt) {
-            this.location = location;
-            this.nbt = nbt;
-        }
-
-        public Location getLocation() {
-            return location;
-        }
-
-        public Map<String, Object> getNbt() {
-            return nbt;
-        }
+    public record BallData(Location location, Material material) {
     }
 
     /**
@@ -730,83 +627,53 @@ public class InGame {
         return new ArrayList<>();
     }
 
-    public void updateBallPhysics(Boat ball) {
-        Vector velocity = ball.getVelocity();
-        if (velocity.length() < 0.1) {
-            velocity.zero();
-            ball.setVelocity(velocity);
+    public void clearBalls(String worldName) {
+        DisplayBall motherBall = motherBalls.remove(worldName);
+        if (motherBall != null) {
+            motherBall.destroy();
+        }
+
+        Set<DisplayBall> worldBalls = balls.remove(worldName);
+        if (worldBalls != null) {
+            for (DisplayBall ball : worldBalls) {
+                ball.destroy();
+            }
+        }
+
+        BukkitTask movementTask = movementCheckTasks.remove(worldName);
+        if (movementTask != null) {
+            movementTask.cancel();
+        }
+
+        BukkitTask ballInTask = ballInCheckTasks.remove(worldName);
+        if (ballInTask != null) {
+            ballInTask.cancel();
         }
     }
 
-    public void checkAllBallsStatic(String worldName) {
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                boolean allStatic = true;
-                for (Boat ball : plugin.getServer().getWorld(worldName).getEntitiesByClass(Boat.class)) {
-                    if (ball.getVelocity().length() > 0.01) {
-                        allStatic = false;
-                        break;
-                    } else if (ball.getVelocity().length() <= 0.01) {
-                        ball.setVelocity(new Vector(0, 0, 0));
-                    }
-                }
-                if (allStatic) {
-                    // 执行进球判断
-                    boolean whiteBallInHole = false;
-                    for (Boat ball : plugin.getServer().getWorld(worldName).getEntitiesByClass(Boat.class)) {
-                        if (isBallInHole(ball)) {
-                            if (ball.equals(getMotherBall(worldName))) {
-                                whiteBallInHole = true;
-                            }
-                            handleBallIn(ball);
-                        }
-                    }
-                    // 切换回合
-                    plugin.getRoundManager().settleTurn(worldName);
-                    EntityEventListener.hitBall.put(worldName, false);
-//                    plugin.getRoundManager().endTurn(worldName);
-//                    plugin.getRoundManager().startTurn(worldName);
-                    // 如果白球进洞，给下一个玩家一个母球
-                    if (whiteBallInHole) {
-                        Player nextPlayer = plugin.getRoundManager().getCurrentPlayer(worldName);
-                        if (nextPlayer != null) {
-                            giveMotherBall(nextPlayer);
-                        }
-                    }
-                    this.cancel();
-                }
-            }
-        }.runTaskTimer(plugin, 5L, 5L); // 每0.25秒检查一次
+    public void setMotherBall(String worldName, DisplayBall ball) {
+        motherBalls.put(worldName, ball);
     }
 
-    private void giveMotherBall(Player player) {
-        // 给玩家发放母球物品
-        ItemStack motherBall = new ItemStack(Material.BIRCH_BOAT);
-        ItemMeta meta = motherBall.getItemMeta();
-        meta.getPersistentDataContainer().set(new NamespacedKey("tableball", "white_ball"), PersistentDataType.BYTE, (byte) 1);
-        motherBall.setItemMeta(meta);
-        player.getInventory().addItem(motherBall);
-    }
-
-    /**
-     * 判断玩家是否可以击打球
-     */
-    public boolean canHitBall(String worldName, Player player, Boat boat) {
-        return plugin.getRoundManager().isCurrentPlayer(worldName, player);
-    }
-
-    public void setMotherBall(String worldName, Boat boat) {
-        motherBalls.put(worldName, boat);
-    }
-
-    public Boat getMotherBall(String worldName) {
+    public DisplayBall getMotherBall(String worldName) {
         return motherBalls.get(worldName);
     }
 
-    private void handleBallIn(Boat ball) {
-        String worldName = ball.getWorld().getName();
-        plugin.getRoundManager().handleBallIn(worldName, ball.equals(getMotherBall(worldName)));
-        ball.remove();
+    public void addBall(String worldName, DisplayBall ball) {
+        balls.computeIfAbsent(worldName, k -> new HashSet<>()).add(ball);
+    }
+
+    public void removeBall(String worldName, DisplayBall ball) {
+        Set<DisplayBall> worldBalls = balls.get(worldName);
+        if (worldBalls != null) {
+            worldBalls.remove(ball);
+            if (worldBalls.isEmpty()) {
+                balls.remove(worldName);
+            }
+        }
+    }
+
+    public Set<DisplayBall> getBalls(String worldName) {
+        return balls.getOrDefault(worldName, new HashSet<>());
     }
 } 

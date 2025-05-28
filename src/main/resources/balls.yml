@@ -1,19 +1,21 @@
-exampleWorld:
+world1:
   balls:
-    1: # 为0时指代母球
-      loc: # 使用double（浮点数）类型存贮球的坐标
-        # 三维坐标
-        x: 0.5
+    ball1:
+      loc:
+        x: 0.0
         y: 64.0
-        z: 10.5
-        # 朝向
-        yaw: 0.0
-        pitch: 0.0
+        z: 0.0
       nbt:
-        Type: "acacia" # 材质类型
-        Invulnerable: true # 尽管nbt中判断一个boolean类型使用的是1或0，这里true/false方便理解，实际会被代码处理为1/0
-        CustomName: "§a1" # 此处定义显示名称
-        CustomNameVisible: true # 是否一直显示球的名字？建议为true
+        color: RED_TERRACOTTA
+        text: "球1"
+    ball2:
+      loc:
+        x: 5.0
+        y: 64.0
+        z: 5.0
+      nbt:
+        color: BLUE_TERRACOTTA
+        text: "球2"
   holes:
     hole1: # 没有命名要求，不重复即可
       #洞的两点极坐标，(x1, y1, z1)和(x2, y2, z2)
@@ -23,3 +25,8 @@ exampleWorld:
       x2: 13
       y2: 63
       z2: 27
+  bounds:
+    x1: 16
+    z1: 30
+    x2: -16
+    z2: -30

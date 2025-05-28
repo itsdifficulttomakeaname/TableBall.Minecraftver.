@@ -48,14 +48,14 @@ public class RoundManager {
         // 设置当前玩家为生存模式
         currentPlayer.setGameMode(GameMode.SURVIVAL);
         currentPlayer.removePotionEffect(PotionEffectType.INVISIBILITY);
-        currentPlayer.setAllowFlight(true);
-        currentPlayer.setFlying(true);
         currentPlayer.sendMessage("§a轮到你的回合了！");
         currentPlayer.sendMessage("§e你只能击打母球！");
 
         // 设置其他玩家为冒险模式
         for (Player player : gameState.getPlayers()) {
-            currentPlayer.setCollidable(false);
+            player.setCollidable(false);
+            player.setAllowFlight(true);
+            player.setFlying(true);
 
             if (!player.equals(currentPlayer)) {
                 setSpectatorMode(player);
@@ -68,10 +68,8 @@ public class RoundManager {
      * @param player 玩家
      */
     private void setSpectatorMode(Player player) {
-        player.setGameMode(GameMode.ADVENTURE);
+        player.setGameMode(GameMode.SURVIVAL);
         player.addPotionEffect(new PotionEffect(PotionEffectType.INVISIBILITY, Integer.MAX_VALUE, 0, false, false));
-        player.setAllowFlight(true);
-        player.setFlying(true);
         player.setCollidable(false);
     }
 

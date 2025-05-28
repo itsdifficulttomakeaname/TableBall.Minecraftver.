@@ -53,7 +53,7 @@ public class Start {
         if (balls != null) {
             for (String key : balls.keySet()) {
                 if (InGame.isMotherBallKey(key)) {
-                    tpLoc = balls.get(key).getLocation();
+                    tpLoc = balls.get(key).location();
                     break;
                 }
             }

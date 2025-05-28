@@ -2,6 +2,7 @@ package org.tableBall.Listeners;
 
 import cn.jason31416.planetlib.PlanetLib;
 import io.papermc.paper.event.entity.EntityPushedByEntityAttackEvent;
+import io.papermc.paper.event.player.PrePlayerAttackEntityEvent;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
@@ -9,18 +10,14 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.enchantments.Enchantment;
-import org.bukkit.entity.Boat;
-import org.bukkit.entity.Entity;
-import org.bukkit.entity.Player;
-import org.bukkit.entity.Vehicle;
+import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.event.player.PlayerInteractEntityEvent;
+import org.bukkit.event.entity.EntityInteractEvent;
+import org.bukkit.event.player.*;
 import org.bukkit.event.vehicle.*;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -37,11 +34,9 @@ import org.tableBall.TableBall;
 import org.tableBall.Utils.WorldUtils;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.event.block.Action;
-import org.bukkit.event.player.PlayerInteractEvent;
+import org.tableBall.Entity.DisplayBall;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class EntityEventListener implements Listener {
     private final TableBall plugin;
@@ -51,6 +46,7 @@ public class EntityEventListener implements Listener {
     private final Map<String, BukkitTask> ballInCheckTasks;
     public static final Map<String, Boolean> hitBall = new HashMap<>();
     public static final Map<Vehicle, Vector> velocities = new HashMap<>();
+    private BukkitRunnable collisionTask;
 
     public EntityEventListener(TableBall plugin, InGame inGame) {
         this.plugin = plugin;
@@ -58,7 +54,9 @@ public class EntityEventListener implements Listener {
         this.start = new Start(plugin, plugin.getWorldUtils(), inGame);
         this.movementCheckTasks = new HashMap<>();
         this.ballInCheckTasks = new HashMap<>();
+        startCollisionTask();
 
+        /*
         PlanetLib.getScheduler().runTimer(t->{
             for(Vehicle v: velocities.keySet()){
                 if(velocities.containsKey(v)) {
@@ -66,8 +64,55 @@ public class EntityEventListener implements Listener {
                 }else velocities.put(v, new Vector(0, 0, 0));
             }
         }, 2, 2);
+        */
     }
 
+    private void startCollisionTask() {
+        collisionTask = new BukkitRunnable() {
+            @Override
+            public void run() {
+                checkCollisions();
+            }
+        };
+        collisionTask.runTaskTimerAsynchronously(plugin, 0L, 1L);
+    }
+
+    private void checkCollisions() {
+        for (DisplayBall ball1 : DisplayBall.displayBalls) {
+            for (DisplayBall ball2 : DisplayBall.displayBalls) {
+                if (ball1.equals(ball2)) continue;
+                
+                if (ball1.isColliding(ball2)) {
+                    plugin.getLogger().info("L86 collided");
+                    handleBallCollision(ball1, ball2);
+                }
+            }
+        }
+    }
+
+    private void handleBallCollision(DisplayBall ball1, DisplayBall ball2) {
+        Vector v1 = ball1.velocity;
+        Vector v2 = ball2.velocity;
+        Vector l1 = ball1.location.toVector();
+        Vector l2 = ball2.location.toVector();
+
+        // 计算碰撞方向
+        Vector collisionNormal = l2.subtract(l1).normalize();
+        
+        // 计算速度在碰撞方向上的分量
+        double v1n = v1.dot(collisionNormal);
+        double v2n = v2.dot(collisionNormal);
+        
+        // 交换法向速度分量
+        Vector v1New = v1.subtract(collisionNormal.multiply(v1n - v2n));
+        Vector v2New = v2.add(collisionNormal.multiply(v1n - v2n));
+        
+        // 更新速度
+        ball1.setVelocity(v1New);
+        ball2.setVelocity(v2New);
+    }
+
+    /*
     @EventHandler
     public void onBoatBlockCollision(VehicleBlockCollisionEvent e){
         plugin.getLogger().info("Collision "+e.getBlock().getType());
@@ -125,10 +170,9 @@ public class EntityEventListener implements Listener {
             return;
         }
     }
+     */
 
-//    @EventHandler
-//    public void onVehicleMove(VehicleMoveEvent e){}
-
+    /*
     @EventHandler
     public void onEntityDamageByEntity(VehicleDamageEvent event) {
         if (!(event.getAttacker() instanceof Player)) {
@@ -174,6 +218,8 @@ public class EntityEventListener implements Listener {
         }
     }
 
+     */
+
     @SuppressWarnings("deprecation")
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
@@ -196,13 +242,6 @@ public class EntityEventListener implements Listener {
     }
 
     @EventHandler
-    public void onVehicleEnter(VehicleEnterEvent event) {
-        if (event.getVehicle() instanceof Boat) {
-            event.setCancelled(true);
-    }
-    }
-
-    @EventHandler
     public void onBlockBreak(BlockBreakEvent event) {
         // 取消所有方块破坏事件
         event.setCancelled(true);
@@ -215,27 +254,82 @@ public class EntityEventListener implements Listener {
         ItemStack item = player.getInventory().getItemInMainHand();
         if (item == null || !item.hasItemMeta()) return;
         ItemMeta meta = item.getItemMeta();
-        if (!meta.getPersistentDataContainer().has(new org.bukkit.NamespacedKey("tableball", "white_ball"), PersistentDataType.BYTE)) return;
+        if (!meta.getPersistentDataContainer().has(new org.bukkit.NamespacedKey("tableball", "white_ball"), PersistentDataType.BYTE))
+            return;
+
         // 判断点击方块是否为蓝冰
         if (event.getClickedBlock() == null || event.getClickedBlock().getType() != Material.BLUE_ICE) {
             player.sendMessage("§c母球只能放在蓝冰上！");
             event.setCancelled(true);
             return;
         }
-        // 生成母球船实体
+
+        // 生成母球展示实体
         Location loc = event.getClickedBlock().getLocation().add(0.5, 1, 0.5);
-        Boat boat = player.getWorld().spawn(loc, Boat.class);
-        EntityEventListener.velocities.put(boat, new Vector(0, 0, 0));
-        boat.setBoatType(Boat.Type.BIRCH);
-        boat.setCustomName("§f母球");
-        boat.setCustomNameVisible(true);
-        boat.getPersistentDataContainer().set(org.tableBall.TableBall.BALL_ID_KEY, PersistentDataType.INTEGER, 0);
-        boat.getPersistentDataContainer().set(org.tableBall.TableBall.BALL_WORLD_KEY, PersistentDataType.STRING, player.getWorld().getName());
-        plugin.getInGame().setMotherBall(inGame.getBallWorld(boat), boat);
+        DisplayBall motherBall = new DisplayBall(loc, Material.WHITE_TERRACOTTA, "母球", true);
+        String worldName = player.getWorld().getName();
+        inGame.setMotherBall(worldName, motherBall);
+        inGame.addBall(worldName, motherBall);
 
         // 移除物品
-        item.setAmount(item.getAmount() - 1);
+        player.getInventory().setItemInMainHand(null);
         player.sendMessage("§a已成功放置母球！");
         event.setCancelled(true);
+    }
+
+
+
+    @EventHandler
+    public void onPlayerInteractDisplay(PlayerInteractAtEntityEvent event) {
+//        plugin.getLogger().info("L287 "+event.getRightClicked().getClass().getName());
+//        if(!(event.getPlayer() instanceof Player player)) return;
+        if (!(event.getRightClicked() instanceof Interaction interactionEntity)) return;
+        Player player = event.getPlayer();
+        if(player == null) return;
+
+        // 查找对应的球
+        DisplayBall ball = findBallByEntity(interactionEntity);
+        if (ball == null) return;
+        
+        // 检查是否是当前玩家的回合
+        String worldName = player.getWorld().getName();
+        if (!plugin.getRoundManager().isCurrentPlayer(worldName, player)) {
+            player.sendMessage("§c现在不是你的回合！");
+            event.setCancelled(true);
+            return;
+        }
+        
+        // 检查是否是母球
+        if (!ball.isMotherBall) {
+            player.sendMessage("§c你只能击打母球！");
+            event.setCancelled(true);
+            return;
+        }
+        
+        // 计算击球方向和速度
+        Vector direction = player.getLocation().getDirection().normalize();
+        double knockbackLevel = player.getInventory().getItemInMainHand().getEnchantmentLevel(org.bukkit.enchantments.Enchantment.KNOCKBACK);
+        Vector velocity = direction.multiply(0.33 * (knockbackLevel + 1)).setY(0);
+        
+        // 设置球的速度
+        ball.setVelocity(velocity);
+        
+        // 处理击球事件
+        plugin.getRoundManager().handleShot(worldName, player);
+        
+        // 检查所有球是否静止
+        plugin.getInGame().checkAllBallsStatic(worldName);
+        
+        event.setCancelled(true);
+    }
+
+    private DisplayBall findBallByEntity(Interaction entity) {
+        plugin.getLogger().info("L326 "+DisplayBall.displayBalls+" "+entity);
+        for (DisplayBall ball : DisplayBall.displayBalls) {
+            if (ball.interactor.getUniqueId().equals(entity.getUniqueId())) {
+                return ball;
+            }
+        }
+        return null;
     }
 }

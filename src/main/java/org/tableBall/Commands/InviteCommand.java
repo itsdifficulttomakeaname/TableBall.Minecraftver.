@@ -161,6 +161,7 @@ public class InviteCommand implements CommandExecutor, TabCompleter {
         List<Player> players = new ArrayList<>();
         players.add(data.inviter);
         players.add(player);
+        player.setAllowFlight(true);
         new Start(plugin, plugin.getWorldUtils(), plugin.getInGame()).startGame(data.worldName, players, data.gameType); // 当前暂未支持同时多把对局
         inviteMap.remove(player.getUniqueId());
         return true;
