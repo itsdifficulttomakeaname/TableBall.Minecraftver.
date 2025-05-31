@@ -17,13 +17,12 @@ world1:
         color: BLUE_TERRACOTTA
         text: "球2"
   holes:
+    y: 62
     hole1: # 没有命名要求，不重复即可
-      #洞的两点极坐标，(x1, y1, z1)和(x2, y2, z2)
+      #洞的两点极坐标，不考虑y，(x1, z1)和(x2, z2)
       x1: 16
-      y1: 63
       z1: 30
       x2: 13
-      y2: 63
       z2: 27
   bounds:
     x1: 16

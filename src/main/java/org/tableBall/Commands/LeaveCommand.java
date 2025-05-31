@@ -8,8 +8,10 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Boat;
 import org.bukkit.entity.Player;
 import org.bukkit.persistence.PersistentDataType;
+import org.tableBall.Entity.DisplayBall;
 import org.tableBall.TableBall;
 
+import java.util.HashSet;
 import java.util.List;
 
 public class LeaveCommand implements CommandExecutor {
@@ -30,11 +32,9 @@ public class LeaveCommand implements CommandExecutor {
         World currentWorld = player.getWorld();
         String lobbyWorld = plugin.getConfig().getString("lobby-world", "world");
 
-        // 清除所有非玩家实体
-        for (org.bukkit.entity.Entity entity : currentWorld.getEntities()) {
-            if (!(entity instanceof Player)) {
-                entity.remove();
-            }
+        // 清除所有球
+        for (DisplayBall i: new HashSet<>(DisplayBall.displayBalls)) {
+            i.destroy();
         }
 
         // 获取当前世界的所有玩家

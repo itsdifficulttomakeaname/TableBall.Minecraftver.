@@ -1,5 +1,6 @@
 package org.tableBall.Manager;
 
+import cn.jason31416.planetlib.hook.NbtHook;
 import org.bukkit.GameMode;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -50,6 +51,9 @@ public class RoundManager {
         currentPlayer.removePotionEffect(PotionEffectType.INVISIBILITY);
         currentPlayer.sendMessage("§a轮到你的回合了！");
         currentPlayer.sendMessage("§e你只能击打母球！");
+
+        getGameState(worldName).setHasScored(false);
+        getGameState(worldName).setWhiteBallIn(false);
 
         // 设置其他玩家为冒险模式
         for (Player player : gameState.getPlayers()) {
@@ -120,7 +124,10 @@ public class RoundManager {
 
         if (gameState.isWhiteBallIn()) {
             // 母球进洞，切换回合
+            ItemStack item = new ItemStack(Material.BIRCH_BOAT, 1);
             endTurn(worldName);
+            NbtHook.addTag(item, "tb.whiteBall");
+            getCurrentPlayer(worldName).getInventory().addItem(item);
             return;
         }
 

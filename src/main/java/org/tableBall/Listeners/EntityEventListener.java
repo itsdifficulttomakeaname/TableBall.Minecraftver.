@@ -1,40 +1,23 @@
 package org.tableBall.Listeners;
 
-import cn.jason31416.planetlib.PlanetLib;
-import io.papermc.paper.event.entity.EntityPushedByEntityAttackEvent;
-import io.papermc.paper.event.player.PrePlayerAttackEntityEvent;
-import net.kyori.adventure.text.Component;
-import org.bukkit.Bukkit;
-import org.bukkit.GameMode;
+import cn.jason31416.planetlib.hook.NbtHook;
 import org.bukkit.Location;
 import org.bukkit.Material;
-import org.bukkit.World;
-import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
-import org.bukkit.event.entity.EntityDamageByEntityEvent;
-import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.event.entity.EntityInteractEvent;
 import org.bukkit.event.player.*;
-import org.bukkit.event.vehicle.*;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.potion.PotionEffect;
-import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
-import org.bukkit.persistence.PersistentDataContainer;
-import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.util.Vector;
 import org.tableBall.Game.InGame;
 import org.tableBall.Game.Start;
 import org.tableBall.TableBall;
-import org.tableBall.Utils.WorldUtils;
-import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.event.block.Action;
 import org.tableBall.Entity.DisplayBall;
+import org.tableBall.Commands.EditModeCommand;
 
 import java.util.*;
 
@@ -47,6 +30,8 @@ public class EntityEventListener implements Listener {
     public static final Map<String, Boolean> hitBall = new HashMap<>();
     public static final Map<Vehicle, Vector> velocities = new HashMap<>();
     private BukkitRunnable collisionTask;
+
+    public static boolean hasStrike = false;
 
     public EntityEventListener(TableBall plugin, InGame inGame) {
         this.plugin = plugin;
@@ -74,15 +59,13 @@ public class EntityEventListener implements Listener {
                 checkCollisions();
             }
         };
-        collisionTask.runTaskTimerAsynchronously(plugin, 0L, 1L);
+        collisionTask.runTaskTimerAsynchronously(plugin, 1L, 1L);
     }
 
     private void checkCollisions() {
         for (DisplayBall ball1 : DisplayBall.displayBalls) {
             for (DisplayBall ball2 : DisplayBall.displayBalls) {
-                if (ball1.equals(ball2)) continue;
-                
-                if (ball1.isColliding(ball2)) {
+                if (ball1.isColliding(ball2)&&ball1.uuid.toString().compareTo(ball2.uuid.toString())>0) {
                     plugin.getLogger().info("L86 collided");
                     handleBallCollision(ball1, ball2);
                 }
@@ -93,23 +76,32 @@ public class EntityEventListener implements Listener {
     private void handleBallCollision(DisplayBall ball1, DisplayBall ball2) {
         Vector v1 = ball1.velocity;
         Vector v2 = ball2.velocity;
-        Vector l1 = ball1.location.toVector();
-        Vector l2 = ball2.location.toVector();
+        Vector x1 = ball1.location.toVector(), x2 = ball2.location.toVector();
 
-        // 计算碰撞方向
-        Vector collisionNormal = l2.subtract(l1).normalize();
-        
-        // 计算速度在碰撞方向上的分量
-        double v1n = v1.dot(collisionNormal);
-        double v2n = v2.dot(collisionNormal);
-        
-        // 交换法向速度分量
-        Vector v1New = v1.subtract(collisionNormal.multiply(v1n - v2n));
-        Vector v2New = v2.add(collisionNormal.multiply(v1n - v2n));
-        
-        // 更新速度
-        ball1.setVelocity(v1New);
-        ball2.setVelocity(v2New);
+        double dv = x1.clone().distance(x2)*x1.clone().distance(x2);
+        double n1 = v2.clone().subtract(v1).dot(x2.clone().subtract(x1)), n2 = v1.clone().subtract(v2).dot(x1.clone().subtract(x2));
+
+        plugin.getLogger().info(x2.clone().subtract(x1).multiply(n1/dv)+"; "+x1.clone().subtract(x2).multiply(n2/dv));
+
+        ball1.velocity.add(x2.clone().subtract(x1).multiply(n1/dv));
+        ball2.velocity.add(x1.clone().subtract(x2).multiply(n2/dv));
+
+//        Vector v1 = ball1.velocity;
+//        Vector v2 = ball2.velocity;
+//        Vector l1 = ball1.location.toVector(), l2 = ball2.location.toVector();
+//        double theta1 = v1.angle(l2.subtract(l1)), theta2 = v2.angle(l1.subtract(l2));
+//        if(Double.isNaN(theta1)) theta1=0;
+//        if(Double.isNaN(theta2)) theta2=0;
+//        Vector v1x = v1.clone().multiply(Math.cos(theta1)), v1y = v1.clone().multiply(Math.sin(theta1));
+//        Vector v2x = v2.clone().multiply(Math.cos(theta2)), v2y = v2.clone().multiply(Math.sin(theta2));
+//        Vector v1f = v1y.clone().add(v2x), v2f = v2y.clone().add(v1x);
+//
+//        plugin.getLogger().info(v1.length()+"; "+v2.length()+"; "+theta1+"; "+theta2+"; "+v1f.length()+"; "+v2f.length());
+
+//            pusherV.setVelocity(v1f);
+//            pushedV.setVelocity(v2f);
+//        ball1.velocity = v1f;
+//        ball2.velocity = v2f;
     }
 
     /*
@@ -244,7 +236,7 @@ public class EntityEventListener implements Listener {
     @EventHandler
     public void onBlockBreak(BlockBreakEvent event) {
         // 取消所有方块破坏事件
-        event.setCancelled(true);
+        if (!EditModeCommand.isEditMode()) event.setCancelled(true);
     }
 
     @EventHandler
@@ -252,9 +244,7 @@ public class EntityEventListener implements Listener {
         if (event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
         Player player = event.getPlayer();
         ItemStack item = player.getInventory().getItemInMainHand();
-        if (item == null || !item.hasItemMeta()) return;
-        ItemMeta meta = item.getItemMeta();
-        if (!meta.getPersistentDataContainer().has(new org.bukkit.NamespacedKey("tableball", "white_ball"), PersistentDataType.BYTE))
+        if (!NbtHook.hasTag(item, "tb.whiteBall"))
             return;
 
         // 判断点击方块是否为蓝冰
@@ -281,8 +271,6 @@ public class EntityEventListener implements Listener {
 
     @EventHandler
     public void onPlayerInteractDisplay(PlayerInteractAtEntityEvent event) {
-//        plugin.getLogger().info("L287 "+event.getRightClicked().getClass().getName());
-//        if(!(event.getPlayer() instanceof Player player)) return;
         if (!(event.getRightClicked() instanceof Interaction interactionEntity)) return;
         Player player = event.getPlayer();
         if(player == null) return;
@@ -293,7 +281,7 @@ public class EntityEventListener implements Listener {
         
         // 检查是否是当前玩家的回合
         String worldName = player.getWorld().getName();
-        if (!plugin.getRoundManager().isCurrentPlayer(worldName, player)) {
+        if (!plugin.getRoundManager().isCurrentPlayer(worldName, player)||hasStrike) {
             player.sendMessage("§c现在不是你的回合！");
             event.setCancelled(true);
             return;
@@ -319,12 +307,13 @@ public class EntityEventListener implements Listener {
         
         // 检查所有球是否静止
         plugin.getInGame().checkAllBallsStatic(worldName);
+
+        hasStrike = true;
         
         event.setCancelled(true);
     }
 
     private DisplayBall findBallByEntity(Interaction entity) {
-        plugin.getLogger().info("L326 "+DisplayBall.displayBalls+" "+entity);
         for (DisplayBall ball : DisplayBall.displayBalls) {
             if (ball.interactor.getUniqueId().equals(entity.getUniqueId())) {
                 return ball;

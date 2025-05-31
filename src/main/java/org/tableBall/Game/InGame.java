@@ -144,6 +144,7 @@ public class InGame {
             }
             Map<String, HoleData> holes = new HashMap<>();
             for (String holeId : holesSection.getKeys(false)) {
+                if (holeId.equals("y")) continue;
                 plugin.getLogger().info("正在加载洞 ID: " + holeId);
                 ConfigurationSection holeSection = holesSection.getConfigurationSection(holeId);
                 if (holeSection == null) {

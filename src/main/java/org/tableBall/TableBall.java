@@ -1,6 +1,7 @@
 package org.tableBall;
 
 import cn.jason31416.planetlib.PlanetLib;
+import cn.jason31416.planetlib.Required;
 import org.bukkit.NamespacedKey;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
@@ -29,7 +30,7 @@ public final class TableBall extends JavaPlugin {
 
     @Override
     public void onEnable() {
-        PlanetLib.initialize(this);
+        PlanetLib.initialize(this, Required.NBT);
 
         // 保存默认配置
         saveDefaultConfig();
@@ -55,6 +56,7 @@ public final class TableBall extends JavaPlugin {
             }
             return org.tableBall.Commands.InviteCommand.handleAcceptInvite((org.bukkit.entity.Player) sender, this);
         });
+        getCommand("editmode").setExecutor(new EditModeCommand(this));
 
         // 注册监听器
         EntityEventListener entityEventListener = new EntityEventListener(this, inGame);
@@ -65,7 +67,17 @@ public final class TableBall extends JavaPlugin {
 
         // 注册桌球物理管理器
         PlanetLib.getScheduler().runTimer(t->{
+            if(DisplayBall.displayBalls.isEmpty()) return;
+            String world = DisplayBall.displayBalls.stream().findFirst().get().getWorld();
             DisplayBall.displayBalls.forEach(DisplayBall::updateMovement);
+
+            outer: if(EntityEventListener.hasStrike) {
+                for(DisplayBall i: DisplayBall.displayBalls){
+                    if(i.velocity.length() > 0.001) break outer;
+                }
+                getRoundManager().settleTurn(world);
+                EntityEventListener.hasStrike = false;
+            }
         }, 1, 1);
 
         getLogger().info("TableBall 插件已启用！");

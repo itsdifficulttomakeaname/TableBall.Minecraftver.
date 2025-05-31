@@ -25,6 +25,10 @@ commands:
     description: 接受TableBall游戏邀请
     usage: /acceptinvite
     permission: tableball.invite
+  editmode:
+    description: 切换编辑模式
+    usage: /<command> <enable/disable/info>
+    permission: tableball.editmode
 
 permissions:
   tableball.invite:
