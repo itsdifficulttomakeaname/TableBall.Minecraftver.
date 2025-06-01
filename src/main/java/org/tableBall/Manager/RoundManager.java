@@ -152,6 +152,9 @@ public class RoundManager {
         GameState gameState = gameStates.get(worldName);
         if (gameState == null) return;
 
+        plugin.getInGame().addScore(worldName, gameState.getCurrentPlayer(), gameState.getTempScore());
+        gameState.resetTempScore();
+
         Player currentPlayer = gameState.getCurrentPlayer();
         currentPlayer.sendMessage("§c回合结束！");
 

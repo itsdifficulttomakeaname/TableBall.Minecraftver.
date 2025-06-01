@@ -69,7 +69,11 @@ public final class TableBall extends JavaPlugin {
         PlanetLib.getScheduler().runTimer(t->{
             if(DisplayBall.displayBalls.isEmpty()) return;
             String world = DisplayBall.displayBalls.stream().findFirst().get().getWorld();
-            DisplayBall.displayBalls.forEach(DisplayBall::updateMovement);
+            int amount = 4;
+            for(int i=0;i<amount;i++) {
+                DisplayBall.displayBalls.forEach(d->d.updateMovement(amount));
+                EntityEventListener.checkCollisions();
+            }
 
             outer: if(EntityEventListener.hasStrike) {
                 for(DisplayBall i: DisplayBall.displayBalls){

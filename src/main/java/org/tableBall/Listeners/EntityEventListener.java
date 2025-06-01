@@ -1,6 +1,7 @@
 package org.tableBall.Listeners;
 
 import cn.jason31416.planetlib.hook.NbtHook;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.entity.*;
@@ -39,7 +40,7 @@ public class EntityEventListener implements Listener {
         this.start = new Start(plugin, plugin.getWorldUtils(), inGame);
         this.movementCheckTasks = new HashMap<>();
         this.ballInCheckTasks = new HashMap<>();
-        startCollisionTask();
+//        startCollisionTask();
 
         /*
         PlanetLib.getScheduler().runTimer(t->{
@@ -62,26 +63,63 @@ public class EntityEventListener implements Listener {
         collisionTask.runTaskTimerAsynchronously(plugin, 1L, 1L);
     }
 
-    private void checkCollisions() {
+    public static void checkCollisions() {
         for (DisplayBall ball1 : DisplayBall.displayBalls) {
             for (DisplayBall ball2 : DisplayBall.displayBalls) {
-                if (ball1.isColliding(ball2)&&ball1.uuid.toString().compareTo(ball2.uuid.toString())>0) {
-                    plugin.getLogger().info("L86 collided");
+                if (ball1 != ball2 && ball1.isColliding(ball2)) {
                     handleBallCollision(ball1, ball2);
                 }
             }
         }
     }
 
+
+    private static void handleBallCollision(DisplayBall ball1, DisplayBall ball2) {
+        Vector v1 = ball1.velocity;
+        Vector v2 = ball2.velocity;
+        Vector x1 = ball1.location.toVector(), x2 = ball2.location.toVector();
+
+        double theta1 = v1.angle(x2.clone().subtract(x1)), theta2 = v2.angle(x1.clone().subtract(x2));
+        if(Double.isNaN(theta1)) theta1=0;
+        if(Double.isNaN(theta2)) theta2=0;
+        Vector v1x = v1.clone().multiply(Math.cos(theta1)), v1y = v1.clone().multiply(Math.sin(theta1));
+        Vector v2x = v2.clone().multiply(Math.cos(theta2)), v2y = v2.clone().multiply(Math.sin(theta2));
+        Vector v1f = v1y.clone().add(v2x), v2f = v2y.clone().add(v1x);
+
+        
+
+//        Vector deltaX = x2.clone().subtract(x1);
+//        double distance = deltaX.length();
+//        double minDistance = ball1.getRadius() + ball2.getRadius();
+//
+//        // 当两球距离>两球判定距离，不碰撞
+//        if (distance > minDistance) return;
+//
+//        Vector normal = deltaX.clone().normalize();
+//        double velocityAlongNormal = v1.clone().subtract(v2).dot(normal);
+//        Vector impulse = normal.clone().multiply(velocityAlongNormal);
+//
+//        ball1.velocity.subtract(impulse);
+//        ball2.velocity.add(impulse);
+//
+//        double overlap = minDistance - distance;
+//        Vector correction = normal.clone().multiply(overlap * 0.5);
+//        ball1.location.subtract(correction);
+//        ball2.location.add(correction);
+
+
+    }
+
+    /*
     private void handleBallCollision(DisplayBall ball1, DisplayBall ball2) {
         Vector v1 = ball1.velocity;
         Vector v2 = ball2.velocity;
         Vector x1 = ball1.location.toVector(), x2 = ball2.location.toVector();
 
         double dv = x1.clone().distance(x2)*x1.clone().distance(x2);
-        double n1 = v2.clone().subtract(v1).dot(x2.clone().subtract(x1)), n2 = v1.clone().subtract(v2).dot(x1.clone().subtract(x2));
+        double n1 = Math.abs(v2.clone().subtract(v1).dot(x2.clone().subtract(x1))), n2 = Math.abs(v1.clone().subtract(v2).dot(x1.clone().subtract(x2)));
 
-        plugin.getLogger().info(x2.clone().subtract(x1).multiply(n1/dv)+"; "+x1.clone().subtract(x2).multiply(n2/dv));
+//        plugin.getLogger().info(x2.clone().subtract(x1).multiply(n1/dv)+"; "+x1.clone().subtract(x2).multiply(n2/dv));
 
         ball1.velocity.add(x2.clone().subtract(x1).multiply(n1/dv));
         ball2.velocity.add(x1.clone().subtract(x2).multiply(n2/dv));
@@ -104,30 +142,9 @@ public class EntityEventListener implements Listener {
 //        ball2.velocity = v2f;
     }
 
+     */
+
     /*
-    @EventHandler
-    public void onBoatBlockCollision(VehicleBlockCollisionEvent e){
-        plugin.getLogger().info("Collision "+e.getBlock().getType());
-        if(velocities.containsValue(e.getVehicle())){
-            Vector v = velocities.get(e.getVehicle());
-            if(e.getBlock().getType()==Material.SPRUCE_PLANKS) {
-                v = new Vector(v.getX(), 0, -v.getZ());
-            }else if(e.getBlock().getType()==Material.DARK_OAK_PLANKS){
-                v = new Vector(-v.getX(), 0, v.getZ());
-            }else if(e.getBlock().getType()==Material.DARK_OAK_LOG || e.getBlock().getType()==Material.SPRUCE_LOG){
-                v = new Vector(0, 0, 0);
-            }
-            velocities.put(e.getVehicle(), v.multiply(0.95));
-            e.getVehicle().setVelocity(velocities.get(e.getVehicle()));
-        }
-    }
-
-    @EventHandler
-    public void onBoatDestroyed(VehicleDestroyEvent e){
-        Vehicle boat=e.getVehicle();
-        velocities.remove(boat);
-    }
-
     @EventHandler
     public void onBoatPushed(VehicleEntityCollisionEvent e) {
         Entity pusher = e.getEntity();
@@ -162,54 +179,6 @@ public class EntityEventListener implements Listener {
             return;
         }
     }
-     */
-
-    /*
-    @EventHandler
-    public void onEntityDamageByEntity(VehicleDamageEvent event) {
-        if (!(event.getAttacker() instanceof Player)) {
-            event.setCancelled(true);
-            return;
-        }
-
-        Player player = (Player) event.getAttacker();
-        Entity entity = event.getVehicle();
-        String worldName = entity.getWorld().getName();
-
-        // 检查是否是当前玩家的回合
-        if (plugin.getRoundManager().isCurrentPlayer(worldName, player)) {
-            //plugin.getLogger().info("是" + player.getName() + "的回合，伤害设为0 L83");
-            event.setDamage(0);
-        } else {
-            //plugin.getLogger().info("不是" + player.getName() + "的回合，取消事件 L86");
-            event.setCancelled(true);
-            return;
-        }
-
-        // 检查是否是母球
-        Boat motherBall = plugin.getInGame().getMotherBall(worldName);
-        if (motherBall != null && motherBall.equals(entity)) {
-            if(hitBall.getOrDefault(plugin.getInGame().getBallWorld(motherBall), false)){
-                return;
-            }
-
-            event.setCancelled(true);
-            hitBall.put(plugin.getInGame().getBallWorld(motherBall), true);
-
-            velocities.put(motherBall, motherBall.getLocation().toVector().subtract(player.getLocation().toVector()).setY(0).normalize().multiply(player.getInventory().getItemInMainHand().getEnchantmentLevel(Enchantment.KNOCKBACK)+1));
-
-            // 处理击球事件
-            plugin.getRoundManager().handleShot(worldName, player);
-            // 更新球的物理状态
-            plugin.getInGame().updateBallPhysics((Boat) entity);
-            // 检查所有球是否静止
-            plugin.getInGame().checkAllBallsStatic(worldName);
-        } else {
-            player.sendMessage("你不可以打除了母球以外的球!");
-            event.setCancelled(true);
-        }
-    }
-
      */
 
     @SuppressWarnings("deprecation")
@@ -255,7 +224,8 @@ public class EntityEventListener implements Listener {
         }
 
         // 生成母球展示实体
-        Location loc = event.getClickedBlock().getLocation().add(0.5, 1, 0.5);
+        Location loc = event.getClickedPosition().toLocation(event.getClickedBlock().getWorld()).add(0, 1, 0);
+        plugin.getLogger().info("§aLoc= "+loc);
         DisplayBall motherBall = new DisplayBall(loc, Material.WHITE_TERRACOTTA, "母球", true);
         String worldName = player.getWorld().getName();
         inGame.setMotherBall(worldName, motherBall);
