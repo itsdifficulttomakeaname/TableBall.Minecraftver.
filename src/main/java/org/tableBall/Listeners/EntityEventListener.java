@@ -4,6 +4,7 @@ import cn.jason31416.planetlib.hook.NbtHook;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -75,17 +76,33 @@ public class EntityEventListener implements Listener {
 
 
     private static void handleBallCollision(DisplayBall ball1, DisplayBall ball2) {
-        Vector v1 = ball1.velocity;
-        Vector v2 = ball2.velocity;
-        Vector x1 = ball1.location.toVector(), x2 = ball2.location.toVector();
+        if(ball1.isFalling||ball2.isFalling) return;
 
-        double theta1 = v1.angle(x2.clone().subtract(x1)), theta2 = v2.angle(x1.clone().subtract(x2));
-        if(Double.isNaN(theta1)) theta1=0;
-        if(Double.isNaN(theta2)) theta2=0;
-        Vector v1x = v1.clone().multiply(Math.cos(theta1)), v1y = v1.clone().multiply(Math.sin(theta1));
-        Vector v2x = v2.clone().multiply(Math.cos(theta2)), v2y = v2.clone().multiply(Math.sin(theta2));
-        Vector v1f = v1y.clone().add(v2x), v2f = v2y.clone().add(v1x);
+        Bukkit.getScheduler().runTask(DisplayBall.plugin, () -> {
+            Vector v1 = ball1.velocity.clone();
+            Vector v2 = ball2.velocity.clone();
+            double angle = v1.angle(v2);
 
+            Vector collideV = ball1.location.toVector().subtract(ball2.location.toVector()).normalize();
+            double angleV1ToCollide = collideV.angle(v1);
+            double angleV2ToCollide = collideV.angle(v2);
+
+            //避免出现NaN
+            if (Double.isNaN(angleV1ToCollide)) angleV1ToCollide = 0;
+            if (Double.isNaN(angleV2ToCollide)) angleV2ToCollide = 0;
+
+            Vector v1cos = collideV.clone().multiply(v1.length() * Math.cos(angleV1ToCollide));
+            Vector v2cos = collideV.clone().multiply(v2.length() * Math.cos(angleV2ToCollide));
+            // 如果这里出bug，碰撞超出预期方向，交换90和-90
+            Vector v1sin = collideV.clone().rotateAroundY(90).multiply(v1.length() * Math.sin(angleV1ToCollide));
+            Vector v2sin = collideV.clone().rotateAroundY(-90).multiply(v2.length() * Math.sin(angleV1ToCollide));
+
+            Vector v1new = v1sin.add(v2cos);
+            Vector v2new = v2sin.add(v1cos);
+
+            ball1.velocity = v1new;
+            ball2.velocity = v2new;
+        });
         
 
 //        Vector deltaX = x2.clone().subtract(x1);
@@ -243,43 +260,37 @@ public class EntityEventListener implements Listener {
     public void onPlayerInteractDisplay(PlayerInteractAtEntityEvent event) {
         if (!(event.getRightClicked() instanceof Interaction interactionEntity)) return;
         Player player = event.getPlayer();
-        if(player == null) return;
+        if (player == null) return;
 
-        // 查找对应的球
         DisplayBall ball = findBallByEntity(interactionEntity);
         if (ball == null) return;
-        
-        // 检查是否是当前玩家的回合
+
         String worldName = player.getWorld().getName();
-        if (!plugin.getRoundManager().isCurrentPlayer(worldName, player)||hasStrike) {
+
+        // 检查回合和母球
+        if (!plugin.getRoundManager().isCurrentPlayer(worldName, player)) {
             player.sendMessage("§c现在不是你的回合！");
             event.setCancelled(true);
             return;
         }
-        
-        // 检查是否是母球
+
         if (!ball.isMotherBall) {
             player.sendMessage("§c你只能击打母球！");
             event.setCancelled(true);
             return;
         }
-        
-        // 计算击球方向和速度
-        Vector direction = player.getLocation().getDirection().normalize();
-        double knockbackLevel = player.getInventory().getItemInMainHand().getEnchantmentLevel(org.bukkit.enchantments.Enchantment.KNOCKBACK);
-        Vector velocity = direction.multiply(0.33 * (knockbackLevel + 1)).setY(0);
-        
-        // 设置球的速度
-        ball.setVelocity(velocity);
-        
-        // 处理击球事件
-        plugin.getRoundManager().handleShot(worldName, player);
-        
-        // 检查所有球是否静止
-        plugin.getInGame().checkAllBallsStatic(worldName);
 
-        hasStrike = true;
-        
+        // 计算击球方向
+        Vector direction = player.getLocation().getDirection().normalize();
+        double knockbackLevel = player.getInventory().getItemInMainHand().getEnchantmentLevel(Enchantment.KNOCKBACK);
+        Vector velocity = direction.multiply(0.5 * (knockbackLevel + 1)).setY(0);
+
+        // 应用速度（确保立即生效）
+        ball.setVelocity(velocity);
+        ball.updateMovement(1); // 强制更新位置
+
+        // 处理回合逻辑（不立即标记hasStrike）
+        plugin.getRoundManager().handleShot(worldName, player);
         event.setCancelled(true);
     }
 

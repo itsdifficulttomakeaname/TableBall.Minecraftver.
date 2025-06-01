@@ -27,8 +27,8 @@ public class DisplayBall {
     public UUID uuid;
     public BukkitRunnable movementTask;
     public boolean isMotherBall=false;
-    public static final double FRICTION = 0.007; // 0.7% 摩擦力
-    public static final double MIN_SPEED = 0.5; // 最小速度阈值
+    public static final double FRICTION = 0.004; // 0.4% 摩擦力
+    public static final double MIN_SPEED = 0.2; // 最小速度阈值
     public static final float BALL_SIZE = 2.0f; // 球的大小
 
     public boolean isFalling = false;
@@ -159,5 +159,9 @@ public class DisplayBall {
 
     public double getRadius() {
         return this.radius;
+    }
+
+    public boolean getIsFalling() {
+        return this.isFalling;
     }
 } 

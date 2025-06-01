@@ -1,30 +1,14 @@
 package org.tableBall.Game;
 
-import net.kyori.adventure.text.Component;
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
-import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.entity.Boat;
-import org.bukkit.entity.Entity;
-import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.persistence.PersistentDataContainer;
-import org.bukkit.persistence.PersistentDataType;
-import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
-import org.bukkit.util.BoundingBox;
-import org.bukkit.util.Vector;
-import org.tableBall.Listeners.EntityEventListener;
-import org.tableBall.Manager.RoundManager;
 import org.tableBall.TableBall;
-import org.bukkit.NamespacedKey;
 import org.tableBall.Entity.DisplayBall;
 import org.tableBall.Utils.WorldUtils;
 
@@ -286,7 +270,9 @@ public class InGame {
 
         boolean allStatic = true;
         for (DisplayBall ball : worldBalls) {
-            if (ball.velocity.length() > 0.5) {
+            if (ball.getIsFalling()) continue;
+            // 更严格的静止阈值（0.1）且忽略Y轴速度
+            if (ball.velocity.clone().setY(0).length() > 0.1) {
                 allStatic = false;
                 break;
             }
