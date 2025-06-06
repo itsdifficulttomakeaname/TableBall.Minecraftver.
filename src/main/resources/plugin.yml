@@ -11,7 +11,8 @@ commands:
     usage: /inviteplayer <玩家> <世界> <类型>
     permission: tableball.invite
   scb:
-    description: 控制记分板显示
+    description: 控制记分板显示pl
+
     usage: /scb <e/d>
     permission: tableball.scoreboard
   addscore:

@@ -4,6 +4,7 @@ import cn.jason31416.planetlib.hook.NbtHook;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.Sound;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
@@ -74,35 +75,63 @@ public class EntityEventListener implements Listener {
         }
     }
 
+    private static void handleBallCollision(DisplayBall ball1, DisplayBall ball2) {
+        if (ball1.isFalling || ball2.isFalling) return;
 
+        Vector deltaPos = ball1.location.toVector().subtract(ball2.location.toVector());
+        Vector normal = deltaPos.normalize();
+        Vector relativeVel = ball1.velocity.clone().subtract(ball2.velocity.clone()); // 相对速度
+        double impulse = relativeVel.dot(normal);
+
+        // 更新速度 (完全弹性碰撞)
+        ball1.velocity.subtract(normal.clone().multiply(impulse));
+        ball2.velocity.add(normal.clone().multiply(impulse));
+
+        // 防止重叠 (可选)
+        double overlap = (ball1.getRadius() + ball2.getRadius()) - deltaPos.length();
+        if (overlap > 0) {
+            Vector correction = normal.clone().multiply(overlap * 0.5);
+            ball1.location.add(correction);
+            ball2.location.subtract(correction);
+        }
+
+        for (Player player : Bukkit.getOnlinePlayers()){
+            if(player.getWorld().equals(ball1.location.getWorld())){
+                player.playSound(
+                        player.getLocation(), // 音效位置
+                        Sound.BLOCK_NOTE_BLOCK_SNARE, // 小军鼓音效（1.12+）
+                        1.0f, // 音量 (0.0-1.0)
+                        1.0f  // 音高 (0.5-2.0)
+                );
+            }
+        }
+    }
+
+/*
     private static void handleBallCollision(DisplayBall ball1, DisplayBall ball2) {
         if(ball1.isFalling||ball2.isFalling) return;
 
-        Bukkit.getScheduler().runTask(DisplayBall.plugin, () -> {
-            Vector v1 = ball1.velocity.clone();
-            Vector v2 = ball2.velocity.clone();
-            double angle = v1.angle(v2);
+        Vector v1 = ball1.velocity.clone();
+        Vector v2 = ball2.velocity.clone();
+        double angle = v1.angle(v2);
 
-            Vector collideV = ball1.location.toVector().subtract(ball2.location.toVector()).normalize();
-            double angleV1ToCollide = collideV.angle(v1);
-            double angleV2ToCollide = collideV.angle(v2);
+        Vector collideV = ball1.location.toVector().subtract(ball2.location.toVector()).normalize();
+        double angleV1ToCollide = collideV.angle(v1), angleV2ToCollide = collideV.angle(v2);
+        if (Double.isNaN(angleV1ToCollide)) angleV1ToCollide=0.0;
+        if (Double.isNaN(angleV2ToCollide)) angleV2ToCollide=0.0;
+        Vector v1cos = collideV.clone().multiply(v1.length() * Math.cos(angleV1ToCollide));
+        Vector v2cos = collideV.clone().multiply(v2.length() * Math.cos(angleV2ToCollide));
+        // 如果这里出bug，碰撞超出预期方向，交换90和-90
+        Vector v1sin = collideV.clone().rotateAroundY(90).multiply(v1.length() * Math.sin(angleV1ToCollide));
+        Vector v2sin = collideV.clone().rotateAroundY(-90).multiply(v2.length() * Math.sin(angleV1ToCollide));
 
-            //避免出现NaN
-            if (Double.isNaN(angleV1ToCollide)) angleV1ToCollide = 0;
-            if (Double.isNaN(angleV2ToCollide)) angleV2ToCollide = 0;
+        Vector v1new = v1sin.add(v2cos);
+        Vector v2new = v2sin.add(v1cos);
 
-            Vector v1cos = collideV.clone().multiply(v1.length() * Math.cos(angleV1ToCollide));
-            Vector v2cos = collideV.clone().multiply(v2.length() * Math.cos(angleV2ToCollide));
-            // 如果这里出bug，碰撞超出预期方向，交换90和-90
-            Vector v1sin = collideV.clone().rotateAroundY(90).multiply(v1.length() * Math.sin(angleV1ToCollide));
-            Vector v2sin = collideV.clone().rotateAroundY(-90).multiply(v2.length() * Math.sin(angleV1ToCollide));
+        ball1.velocity = v1new;
+        ball2.velocity = v2new;
 
-            Vector v1new = v1sin.add(v2cos);
-            Vector v2new = v2sin.add(v1cos);
 
-            ball1.velocity = v1new;
-            ball2.velocity = v2new;
-        });
         
 
 //        Vector deltaX = x2.clone().subtract(x1);
@@ -126,6 +155,8 @@ public class EntityEventListener implements Listener {
 
 
     }
+
+ */
 
     /*
     private void handleBallCollision(DisplayBall ball1, DisplayBall ball2) {
@@ -283,13 +314,16 @@ public class EntityEventListener implements Listener {
         // 计算击球方向
         Vector direction = player.getLocation().getDirection().normalize();
         double knockbackLevel = player.getInventory().getItemInMainHand().getEnchantmentLevel(Enchantment.KNOCKBACK);
-        Vector velocity = direction.multiply(0.5 * (knockbackLevel + 1)).setY(0);
+        Vector velocity = direction.multiply(0.33 * (knockbackLevel + 1)).setY(0);
 
         // 应用速度（确保立即生效）
         ball.setVelocity(velocity);
-        ball.updateMovement(1); // 强制更新位置
+//        ball.updateMovement(1); // 强制更新位置
 
-        // 处理回合逻辑（不立即标记hasStrike）
+        // 有问题就删掉这个
+        EntityEventListener.hasStrike = true;
+
+        // 处理回合逻辑
         plugin.getRoundManager().handleShot(worldName, player);
         event.setCancelled(true);
     }

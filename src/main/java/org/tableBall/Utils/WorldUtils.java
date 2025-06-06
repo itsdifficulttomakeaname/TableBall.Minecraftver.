@@ -71,7 +71,7 @@ public class WorldUtils {
             MultiverseWorld mvWorld = worldManager.getMVWorld(worldName);
             if (mvWorld != null) {
                 return mvWorld.getSpawnLocation();
-    }
+            }
         }
         return null;
     }

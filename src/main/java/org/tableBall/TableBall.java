@@ -16,6 +16,7 @@ import org.tableBall.Utils.WorldUtils;
 import org.tableBall.Commands.ScoreBoardCommand;
 
 import java.io.File;
+import java.util.ArrayList;
 
 public final class TableBall extends JavaPlugin {
     public static final NamespacedKey BALL_ID_KEY = new NamespacedKey("tableball", "ball_id");
@@ -66,6 +67,7 @@ public final class TableBall extends JavaPlugin {
         DisplayBall.plugin = this;
 
         // 注册桌球物理管理器
+        /*
         PlanetLib.getScheduler().runTimer(t->{
             if(DisplayBall.displayBalls.isEmpty()) return;
             String world = DisplayBall.displayBalls.stream().findFirst().get().getWorld();
@@ -81,6 +83,32 @@ public final class TableBall extends JavaPlugin {
                 }
                 getRoundManager().settleTurn(world);
                 EntityEventListener.hasStrike = false;
+            }
+        }, 1, 1);
+         */
+        PlanetLib.getScheduler().runTimer(t->{
+            if(DisplayBall.displayBalls.isEmpty()) return;
+            String world = DisplayBall.displayBalls.stream().findFirst().get().getWorld();
+            int amount = 4;
+
+            for(int i=0;i<amount;i++) {
+                new ArrayList<>(DisplayBall.displayBalls).forEach(d->d.updateMovement(amount));
+                EntityEventListener.checkCollisions();
+            }
+
+            if(EntityEventListener.hasStrike) {
+                boolean allStopped = true;
+                for(DisplayBall ball : DisplayBall.displayBalls) {
+                    if(ball.velocity.length() > DisplayBall.MIN_SPEED) {
+                        allStopped = false;
+                        break;
+                    }
+                }
+
+                if(allStopped) {
+                    getRoundManager().settleTurn(world);
+                    EntityEventListener.hasStrike = false;
+                }
             }
         }, 1, 1);
 

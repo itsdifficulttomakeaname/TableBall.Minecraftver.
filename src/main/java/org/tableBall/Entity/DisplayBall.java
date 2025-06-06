@@ -66,21 +66,25 @@ public class DisplayBall {
             //velocity.setZ(velocity.getZ()*0.8);
             velocity.setX(0).setZ(0);
             if(plugin.getInGame().ballsConfig.getInt(getWorld() + ".holes.y") >= location.getY()){
-                PlanetLib.getScheduler().runNextTick(t->this.destroy());
+                destroy();
                 plugin.getRoundManager().handleBallIn(getWorld(), isMotherBall);
             }
         }else{
             // 应用摩擦力
-            velocity = velocity.multiply(1 - FRICTION);
+            velocity.multiply(1 - FRICTION/amount);
 
             // 阻止球在Y轴上异常运动
             velocity.setY(0);
 
             // 检查速度是否低于阈值
-            if (velocity.length() < MIN_SPEED) {
+            if (velocity.length() < MIN_SPEED && velocity.length() != 0.0) {
                 velocity = new Vector(0, 0, 0);
+//                plugin.getLogger().info("Velocity is now lower than MIN_SPEED.Stopped");
                 return;
             }
+//            else if(velocity.length() > MIN_SPEED){
+//                plugin.getLogger().info("Velocity(Higher than MIN_SPEED): "+velocity.clone().length()+"; Location at: "+location);
+//            }
 
             int x1 = plugin.getInGame().ballsConfig.getInt(getWorld() + ".bounds.x1");
             int z1 = plugin.getInGame().ballsConfig.getInt(getWorld() + ".bounds.z1");
@@ -90,30 +94,34 @@ public class DisplayBall {
             // 假设x2>x1, z2>z1
             //碰壁检测，建议加0.25校准值防止卡在墙里
 
+            // 弹性系数
+            double restitution = 0.8;
+
             if (location.getX() < x1 - 0.25) {
-                velocity.setX(-velocity.getX());
+                velocity.setX(-velocity.getX()*restitution);
                 location.setX(x1);
             }
             if (location.getX() > x2 + 0.25) {
-                velocity.setX(-velocity.getX());
+                velocity.setX(-velocity.getX()*restitution);
                 location.setX(x2);
             }
 
             if (location.getZ() < z1 - 0.25) {
-                velocity.setZ(-velocity.getZ());
+                velocity.setZ(-velocity.getZ()*restitution);
                 location.setZ(z1);
             }
             if (location.getZ() > z2 + 0.25) {
-                velocity.setZ(-velocity.getZ());
+                velocity.setZ(-velocity.getZ()*restitution);
                 location.setZ(z2);
             }
         }
 
-        location.add(velocity.multiply(1/amount));
+        location.add(velocity.clone().multiply(1.0/amount));
 //        location.setY(Math.round(location.getY())+0.01);
         this.blockDisplay.setVelocity(velocity.clone().multiply(20));
-        PlanetLib.getScheduler().teleportAsync(blockDisplay, location);
-        PlanetLib.getScheduler().teleportAsync(interactor, location.clone().add(new Vector(0.5, 0, 0.5)));
+        blockDisplay.teleport(location);
+        interactor.teleport(location.clone().add(new Vector(0.5, 0, 0.5)));
+//        plugin.getLogger().info("Teleported: "+velocity.clone().length()+"; Location at: "+location);
 
         if(!isFalling) for(String key: section.getKeys(false)){
             int hx1 = section.getInt(key+".x1");
@@ -140,7 +148,7 @@ public class DisplayBall {
                     hx1 < location.getX()+0.75 && hx2 > location.getX()+0.75 &&
                     hz1 < location.getZ()+0.75 && hz2 > location.getZ()+0.75 ) {
                 isFalling = true;
-                velocity.setY(-0.07);
+                velocity.setY(-0.07).setX(0).setZ(0);
             }
         }
     }
