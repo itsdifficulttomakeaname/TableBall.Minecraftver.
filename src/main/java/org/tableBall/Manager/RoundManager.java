@@ -1,13 +1,17 @@
 package org.tableBall.Manager;
 
 import cn.jason31416.planetlib.hook.NbtHook;
+import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.GameMode;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+import org.tableBall.Entity.DisplayBall;
 import org.tableBall.Game.GameState;
+import org.tableBall.Listeners.EntityEventListener;
 import org.tableBall.TableBall;
 
 import java.util.*;
@@ -16,6 +20,7 @@ public class RoundManager {
     private final TableBall plugin;
     private final Map<String, GameState> gameStates; // 世界 -> 游戏状态
     private final Map<String, String> gameTypes = new HashMap<>();
+    public static Map<String, Integer> scores = new HashMap<>();
 
     public RoundManager(TableBall plugin) {
         this.plugin = plugin;
@@ -45,6 +50,8 @@ public class RoundManager {
 
         Player currentPlayer = gameState.getCurrentPlayer();
         if (currentPlayer == null) return;
+
+        EntityEventListener.hasStrike = false;
 
         // 设置当前玩家为生存模式
         currentPlayer.setGameMode(GameMode.SURVIVAL);
@@ -100,7 +107,7 @@ public class RoundManager {
         GameState gameState = gameStates.get(worldName);
         if (gameState == null) return;
 
-        plugin.getLogger().info("handleBallIn: "+worldName+" "+isWhiteBall);
+//        plugin.getLogger().info("handleBallIn: "+worldName+" "+isWhiteBall);
 
         if (isWhiteBall) {
             gameState.setWhiteBallIn(true);
@@ -120,7 +127,30 @@ public class RoundManager {
 
         gameState.setWaitingForBallsToStop(false);
 
-        //plugin.getLogger().info("settleTurn: "+gameState.isWhiteBallIn()+" "+gameState.hasScored());
+        if(!gameState.isWhiteBallIn()){
+            int points = gameState.getBallsInHole() * 2;
+            gameState.resetBallsInHole();
+            scores.put(getCurrentPlayer(worldName).getName(), scores.getOrDefault(getCurrentPlayer(worldName).getName(), 0)+points);
+            for(Player i: Bukkit.getWorld(worldName).getPlayers()){
+                i.sendMessage("§a玩家 "+getCurrentPlayer(worldName).getName()+" 进球得 "+points+" 分");
+                for (Player p : Bukkit.getWorld(worldName).getPlayers()) {
+                    int s = RoundManager.scores.getOrDefault(p.getName(), -1);
+                    if(s==-1) continue;
+                    i.sendMessage("§b" + p.getName() + "§f 得分: §a" + s);
+                }
+            }
+        }
+
+        outer:
+        {
+            for (DisplayBall ball : DisplayBall.displayBalls) {
+                if (!ball.isMotherBall){
+                    break outer;
+                }
+            }
+            plugin.getInGame().endGame(worldName);
+            return;
+        }
 
         if (gameState.isWhiteBallIn()) {
             // 母球进洞，切换回合
@@ -131,12 +161,9 @@ public class RoundManager {
             return;
         }
 
+
         if (gameState.hasScored()) {
             // 有效进球，加分并保持回合
-            int points = gameState.getBallsInHole() * 2;
-            gameState.addTempScore(points);
-            Player currentPlayer = gameState.getCurrentPlayer();
-            currentPlayer.sendMessage("§a你获得了 " + points + " 分！");
             startTurn(worldName);
         } else {
             // 未进球，切换回合
@@ -152,10 +179,8 @@ public class RoundManager {
         GameState gameState = gameStates.get(worldName);
         if (gameState == null) return;
 
-        plugin.getInGame().addScore(worldName, gameState.getCurrentPlayer(), gameState.getTempScore());
-        gameState.resetTempScore();
-
         Player currentPlayer = gameState.getCurrentPlayer();
+
         currentPlayer.sendMessage("§c回合结束！");
 
         // 切换到下一个玩家

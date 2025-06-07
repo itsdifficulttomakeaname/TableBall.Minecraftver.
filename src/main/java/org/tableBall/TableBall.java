@@ -7,6 +7,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.tableBall.Commands.*;
 import org.tableBall.Entity.DisplayBall;
+import org.tableBall.Game.GameState;
 import org.tableBall.Game.InGame;
 import org.tableBall.Game.End;
 import org.tableBall.Manager.RoundManager;
@@ -28,6 +29,8 @@ public final class TableBall extends JavaPlugin {
     private ScoreBoardManager scoreBoardManager;
     private RoundManager roundManager;
     private EntityEventListener entityEventListener;
+    private GameState gamestate;
+    private DisplayBall displayBall;
 
     @Override
     public void onEnable() {
@@ -99,7 +102,7 @@ public final class TableBall extends JavaPlugin {
             if(EntityEventListener.hasStrike) {
                 boolean allStopped = true;
                 for(DisplayBall ball : DisplayBall.displayBalls) {
-                    if(ball.velocity.length() > DisplayBall.MIN_SPEED) {
+                    if(ball.velocity.length() > DisplayBall.MIN_SPEED || ball.isFalling) {
                         allStopped = false;
                         break;
                     }
@@ -107,7 +110,6 @@ public final class TableBall extends JavaPlugin {
 
                 if(allStopped) {
                     getRoundManager().settleTurn(world);
-                    EntityEventListener.hasStrike = false;
                 }
             }
         }, 1, 1);
@@ -146,5 +148,13 @@ public final class TableBall extends JavaPlugin {
 
     public void setEntityEventListener(EntityEventListener entityEventListener) {
         this.entityEventListener = entityEventListener;
+    }
+
+    public GameState getGamestate(){
+        return this.gamestate;
+    }
+
+    public DisplayBall getDisplayBall(){
+        return this.displayBall;
     }
 }

@@ -7,6 +7,7 @@ import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.*;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.util.Transformation;
 import org.bukkit.util.Vector;
 import org.tableBall.TableBall;
 
@@ -14,27 +15,27 @@ import java.util.*;
 
 @SuppressWarnings("all")
 public class DisplayBall {
-    private double radius = BALL_SIZE / 2;
     public static TableBall plugin;
     public static final Set<DisplayBall> displayBalls = new HashSet<>();
 
     public final BlockDisplay blockDisplay;
     public final Interaction interactor;
+    public final ArmorStand textDisplay;
     public Location location;
     public final String text;
     public final Material color;
     public Vector velocity;
     public UUID uuid;
-    public BukkitRunnable movementTask;
     public boolean isMotherBall=false;
-    public static final double FRICTION = 0.004; // 0.4% 摩擦力
+    public final double FRICTION = plugin.getInGame().ballsConfig.getDouble(getWorld() + ".friction")/100.0; // 0.6% 摩擦力
     public static final double MIN_SPEED = 0.2; // 最小速度阈值
-    public static final float BALL_SIZE = 2.0f; // 球的大小
+    public final double BALL_SIZE = plugin.getInGame().ballsConfig.getDouble(getWorld() + ".ball_size"); // 球的大小
+    private double radius = BALL_SIZE / 2;
 
     public boolean isFalling = false;
 
     public DisplayBall(Location location, Material color, String text, boolean isMotherBall) {
-        this.location = location;
+        this.location = location.clone();
         this.color = color;
         this.text = text;
         this.velocity = new Vector(0, 0, 0);
@@ -46,7 +47,17 @@ public class DisplayBall {
         // 创建方块展示实体
         this.blockDisplay = (BlockDisplay) location.getWorld().spawnEntity(location, EntityType.BLOCK_DISPLAY);
         blockDisplay.setBlock(color.createBlockData());
+
+        // 这里修改球的外观大小，有问题就注释掉
+        Transformation transformation = blockDisplay.getTransformation();
+        transformation.getScale().set(BALL_SIZE, BALL_SIZE, BALL_SIZE);
+        blockDisplay.setTransformation(transformation);
 //        interactor.setPassenger(blockDisplay);
+
+        textDisplay = (ArmorStand) location.getWorld().spawnEntity(location, EntityType.ARMOR_STAND);
+        textDisplay.setInvisible(true);
+        textDisplay.setCustomName(text);
+        textDisplay.setCustomNameVisible(true);
 
         displayBalls.add(this);
     }
@@ -54,7 +65,13 @@ public class DisplayBall {
     public void destroy() {
         blockDisplay.remove();
         interactor.remove();
+        textDisplay.remove();
         displayBalls.remove(this);
+        plugin.getInGame().getBalls(getWorld()).remove(this);
+
+//        PlanetLib.getScheduler().runNextTick(t->{
+//            plugin.getLogger().info("Destroyed entity: success="+blockDisplay.isDead());
+//        });
     }
 
     public void updateMovement(int amount) {
@@ -91,26 +108,25 @@ public class DisplayBall {
             int x2 = plugin.getInGame().ballsConfig.getInt(getWorld() + ".bounds.x2");
             int z2 = plugin.getInGame().ballsConfig.getInt(getWorld() + ".bounds.z2");
 
+            // 弹性系数
+            double restitution = plugin.getInGame().ballsConfig.getDouble(getWorld() + ".restitution");
+
             // 假设x2>x1, z2>z1
             //碰壁检测，建议加0.25校准值防止卡在墙里
-
-            // 弹性系数
-            double restitution = 0.8;
-
-            if (location.getX() < x1 - 0.25) {
+            if (location.getX() < x1 - radius) {
                 velocity.setX(-velocity.getX()*restitution);
                 location.setX(x1);
             }
-            if (location.getX() > x2 + 0.25) {
+            if (location.getX() > x2 + radius) {
                 velocity.setX(-velocity.getX()*restitution);
                 location.setX(x2);
             }
 
-            if (location.getZ() < z1 - 0.25) {
+            if (location.getZ() < z1 - radius) {
                 velocity.setZ(-velocity.getZ()*restitution);
                 location.setZ(z1);
             }
-            if (location.getZ() > z2 + 0.25) {
+            if (location.getZ() > z2 + radius) {
                 velocity.setZ(-velocity.getZ()*restitution);
                 location.setZ(z2);
             }
@@ -120,7 +136,11 @@ public class DisplayBall {
 //        location.setY(Math.round(location.getY())+0.01);
         this.blockDisplay.setVelocity(velocity.clone().multiply(20));
         blockDisplay.teleport(location);
+
         interactor.teleport(location.clone().add(new Vector(0.5, 0, 0.5)));
+
+        textDisplay.setVelocity(velocity.clone().multiply(20));
+        textDisplay.teleport(location.clone().add(new Vector(0.5, -0.8, 0.5)));
 //        plugin.getLogger().info("Teleported: "+velocity.clone().length()+"; Location at: "+location);
 
         if(!isFalling) for(String key: section.getKeys(false)){

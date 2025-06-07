@@ -21,11 +21,14 @@ import org.tableBall.TableBall;
 import org.bukkit.event.block.Action;
 import org.tableBall.Entity.DisplayBall;
 import org.tableBall.Commands.EditModeCommand;
+import org.bukkit.configuration.ConfigurationSection;
 
 import java.util.*;
 
+import static java.lang.Math.max;
+
 public class EntityEventListener implements Listener {
-    private final TableBall plugin;
+    private static TableBall plugin;
     private final InGame inGame;
     private final Start start;
     private final Map<String, BukkitTask> movementCheckTasks;
@@ -37,7 +40,7 @@ public class EntityEventListener implements Listener {
     public static boolean hasStrike = false;
 
     public EntityEventListener(TableBall plugin, InGame inGame) {
-        this.plugin = plugin;
+        EntityEventListener.plugin = plugin;
         this.inGame = inGame;
         this.start = new Start(plugin, plugin.getWorldUtils(), inGame);
         this.movementCheckTasks = new HashMap<>();
@@ -95,12 +98,17 @@ public class EntityEventListener implements Listener {
             ball2.location.subtract(correction);
         }
 
+        float maxVelocity = (float) (0.33* getHighestKnockbackLevel());
+        float loudness = loudnessProcess(max(ball1.velocity.length(),ball2.velocity.length()),maxVelocity);
+
+        Location soundLoc = ball1.location;
+
         for (Player player : Bukkit.getOnlinePlayers()){
             if(player.getWorld().equals(ball1.location.getWorld())){
                 player.playSound(
-                        player.getLocation(), // 音效位置
-                        Sound.BLOCK_NOTE_BLOCK_SNARE, // 小军鼓音效（1.12+）
-                        1.0f, // 音量 (0.0-1.0)
+                        soundLoc, // 音效位置
+                        Sound.BLOCK_NOTE_BLOCK_BASEDRUM, // 低音鼓音效（1.12+）
+                        loudness, // 音量 (0.0-1.0)
                         1.0f  // 音高 (0.5-2.0)
                 );
             }
@@ -256,6 +264,10 @@ public class EntityEventListener implements Listener {
         if (!EditModeCommand.isEditMode()) event.setCancelled(true);
     }
 
+    private static Material getMaterialOfMotherBall() {
+        return Material.WHITE_TERRACOTTA;
+    }
+
     @EventHandler
     public void onPlayerPlaceWhiteBall(PlayerInteractEvent event) {
         if (event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
@@ -272,9 +284,10 @@ public class EntityEventListener implements Listener {
         }
 
         // 生成母球展示实体
-        Location loc = event.getClickedPosition().toLocation(event.getClickedBlock().getWorld()).add(0, 1, 0);
-        plugin.getLogger().info("§aLoc= "+loc);
-        DisplayBall motherBall = new DisplayBall(loc, Material.WHITE_TERRACOTTA, "母球", true);
+        Location loc = event.getClickedBlock().getLocation().add(Objects.requireNonNull(event.getClickedPosition()));
+//        plugin.getLogger().info("\nLoc= "+loc+"\n被右键方块的位置= "+event.getClickedBlock().getLocation());
+        Material material = getMaterialOfMotherBall();
+        DisplayBall motherBall = new DisplayBall(loc, material, "§f白球", true);
         String worldName = player.getWorld().getName();
         inGame.setMotherBall(worldName, motherBall);
         inGame.addBall(worldName, motherBall);
@@ -298,8 +311,9 @@ public class EntityEventListener implements Listener {
 
         String worldName = player.getWorld().getName();
 
+        // 如果既不是当前回合的玩家，又不是母球，就直接return，不做任何提示
         // 检查回合和母球
-        if (!plugin.getRoundManager().isCurrentPlayer(worldName, player)) {
+        if (!plugin.getRoundManager().isCurrentPlayer(worldName, player)&&!hasStrike) {
             player.sendMessage("§c现在不是你的回合！");
             event.setCancelled(true);
             return;
@@ -335,5 +349,28 @@ public class EntityEventListener implements Listener {
             }
         }
         return null;
+    }
+
+    private static float loudnessProcess(double vel, double maxVel){
+        if (vel <= maxVel) {
+            return (float) ((float) vel/maxVel);
+        }else{
+            return 1.0f;
+        }
+    }
+
+    private static int getHighestKnockbackLevel() {
+        ConfigurationSection items = plugin.getConfig().getConfigurationSection("items");
+        if (items == null) return 0;
+
+        int highestLevel = 0;
+        for (String key : items.getKeys(false)) {
+            ConfigurationSection item = items.getConfigurationSection(key);
+            if (item != null && item.contains("enchantments.knockback")) {
+                int level = item.getInt("enchantments.knockback", 0);
+                highestLevel = max(highestLevel, level);
+            }
+        }
+        return highestLevel;
     }
 }

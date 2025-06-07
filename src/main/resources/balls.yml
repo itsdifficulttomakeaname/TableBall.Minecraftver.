@@ -1,4 +1,7 @@
 world1:
+  friction: 0.6 # 100为最大摩擦力，表现为速度减小
+  ball_size: 2.0 # double类型记录法
+  restitution: 0.8 #1为完全弹性碰撞
   balls:
     ball1:
       loc:
@@ -24,7 +27,7 @@ world1:
       z1: 30
       x2: 13
       z2: 27
-  bounds:
+  bounds: # 务必保证x2>x1,z2>z1
     x1: 16
     z1: 30
     x2: -16

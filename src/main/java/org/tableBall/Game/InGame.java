@@ -1,5 +1,6 @@
 package org.tableBall.Game;
 
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
@@ -8,6 +9,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
+import org.tableBall.Commands.LeaveCommand;
 import org.tableBall.TableBall;
 import org.tableBall.Entity.DisplayBall;
 import org.tableBall.Utils.WorldUtils;
@@ -92,10 +94,10 @@ public class InGame {
                 );
                 ConfigurationSection nbtSection = ballSection.getConfigurationSection("nbt");
                 if (nbtSection == null) {
-                    plugin.getLogger().severe("球 " + ballKey + " 缺少NBT配置！");
+                    plugin.getLogger().warning("球 " + ballKey + " 缺少NBT配置！");
                     continue;
                 }
-                balls.put(ballKey, new BallData(loc, Material.getMaterial(nbtSection.getString("color", "STONE"))));
+                balls.put(ballKey, new BallData(loc, Material.getMaterial(nbtSection.getString("color", "STONE")), nbtSection.getString("text", "-")));
                 //plugin.getLogger().info("成功加载球 ID: " + ballKey);
             }
             worldBalls.put(worldName, balls);
@@ -183,7 +185,7 @@ public class InGame {
         }
 
         try {
-            DisplayBall ball = new DisplayBall(loc, ballData.material(), "球" + ballId, isMotherBallKey(ballId));
+            DisplayBall ball = new DisplayBall(loc, ballData.material(), ballData.name, isMotherBallKey(ballId));
             addBall(worldName, ball);
 
             //plugin.getLogger().info("球 ID: " + ballId + " 生成完成！");
@@ -270,9 +272,8 @@ public class InGame {
 
         boolean allStatic = true;
         for (DisplayBall ball : worldBalls) {
-            if (ball.getIsFalling()) continue;
             // 更严格的静止阈值（0.1）且忽略Y轴速度
-            if (ball.velocity.clone().setY(0).length() > 0.1) {
+            if (ball.velocity.clone().length() > 0.1) {
                 allStatic = false;
                 break;
             }
@@ -300,38 +301,8 @@ public class InGame {
      * @param worldName 世界名称
      */
     public void endGame(String worldName) {
-        GameData gameData = gameDataMap.get(worldName);
-        if (gameData == null) return;
 
-        // 获取最高分
-        int maxScore = -1;
-        List<Player> winners = new ArrayList<>();
-
-        for (Map.Entry<Player, Integer> entry : gameData.getScores().entrySet()) {
-            int score = entry.getValue();
-            if (score > maxScore) {
-                maxScore = score;
-                winners.clear();
-                winners.add(entry.getKey());
-            } else if (score == maxScore) {
-                winners.add(entry.getKey());
-            }
-        }
-
-        // 显示结果
-        if (winners.size() == 1) {
-            Player winner = winners.get(0);
-            for (Player player : gameData.getPlayers()) {
-                player.sendMessage("§6获胜者: " + winner.getName() + " §e得分: " + maxScore);
-            }
-        } else {
-            for (Player player : gameData.getPlayers()) {
-                player.sendMessage("§6平局！§e得分: " + maxScore);
-            }
-        }
-
-        // 清理游戏数据
-        gameDataMap.remove(worldName);
+        LeaveCommand.endGameForRealLikeDeepseekSTFU(Bukkit.getWorld(worldName));
     }
 
     /**
@@ -354,21 +325,6 @@ public class InGame {
         gameData.addScore(player, score);
         player.sendMessage("§a得分 +" + score);
     }
-
-    /**
-     * 获取玩家分数
-     * @param player 玩家
-     * @return 分数，如果玩家不在游戏中则返回-1
-     */
-    public int getScore(Player player) {
-        for (GameData gameData : gameDataMap.values()) {
-            if (gameData.getPlayers().contains(player)) {
-                return gameData.getScore(player);
-            }
-        }
-        return -1;
-    }
-
     /**
      * 获取游戏类型
      * @param player 玩家
@@ -524,7 +480,7 @@ public class InGame {
     /**
      * 球数据内部类
      */
-    public record BallData(Location location, Material material) {
+    public record BallData(Location location, Material material, String name) {
     }
 
     /**

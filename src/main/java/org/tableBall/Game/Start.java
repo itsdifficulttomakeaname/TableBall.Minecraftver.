@@ -6,6 +6,7 @@ import org.bukkit.entity.Boat;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
+import org.tableBall.Manager.RoundManager;
 import org.tableBall.TableBall;
 import org.tableBall.Utils.WorldUtils;
 import org.tableBall.Utils.InventoryUtils;
@@ -62,11 +63,17 @@ public class Start {
             tpLoc = gameWorld.getSpawnLocation();
         }
 
+        for(Player p: players){
+            RoundManager.scores.put(p.getName(), 0);
+        }
+
         // 传送玩家到球台
         for (Player player : players) {
             player.teleport(tpLoc);
             // 发放config.yml中的物品
             new InventoryUtils(plugin).loadAndSetInventoryFromConfig(player);
+            // 创建计分板
+            plugin.getScoreBoardManager().createScoreboard(player, gameType);
         }
 
         // 初始化回合

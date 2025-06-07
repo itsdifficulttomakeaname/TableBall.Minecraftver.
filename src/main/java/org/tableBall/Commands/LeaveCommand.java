@@ -9,27 +9,22 @@ import org.bukkit.entity.Boat;
 import org.bukkit.entity.Player;
 import org.bukkit.persistence.PersistentDataType;
 import org.tableBall.Entity.DisplayBall;
+import org.tableBall.Game.GameState;
+import org.tableBall.Manager.RoundManager;
 import org.tableBall.TableBall;
 
 import java.util.HashSet;
 import java.util.List;
 
 public class LeaveCommand implements CommandExecutor {
-    private final TableBall plugin;
+    public static TableBall plugin;
 
-    public LeaveCommand(TableBall plugin) {
-        this.plugin = plugin;
+
+    public LeaveCommand(TableBall pl) {
+        plugin = pl;
     }
 
-    @Override
-    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (!(sender instanceof Player)) {
-            sender.sendMessage("§c只有玩家才能使用此命令！");
-            return true;
-        }
-
-        Player player = (Player) sender;
-        World currentWorld = player.getWorld();
+    public static void endGameForRealLikeDeepseekSTFU(World currentWorld){
         String lobbyWorld = plugin.getConfig().getString("lobby-world", "world");
 
         // 清除所有球
@@ -37,11 +32,12 @@ public class LeaveCommand implements CommandExecutor {
             i.destroy();
         }
 
+        System.out.println(RoundManager.scores);
+
         // 获取当前世界的所有玩家
         for (Player worldPlayer : currentWorld.getPlayers()) {
             // 传送玩家到主城
             if (Bukkit.getWorld(lobbyWorld) != null) {
-                worldPlayer.teleport(Bukkit.getWorld(lobbyWorld).getSpawnLocation());
                 // 清空物品栏
                 worldPlayer.getInventory().clear();
                 // 清除药水效果
@@ -53,15 +49,16 @@ public class LeaveCommand implements CommandExecutor {
                 worldPlayer.setFlying(false);
                 // 展示结算信息
                 worldPlayer.sendMessage("§e本局结算：");
-                for (Player p : plugin.getInGame().getPlayersInWorld(currentWorld.getName())) {
-                    int s = plugin.getInGame().getScore(p);
+                for (Player p : currentWorld.getPlayers()) {
+                    int s = RoundManager.scores.getOrDefault(p.getName(), -1);
+                    if(s==-1) continue;
                     worldPlayer.sendMessage("§b" + p.getName() + "§f 得分: §a" + s);
                 }
                 // 判定胜负
                 int maxScore = -1;
                 List<Player> winners = new java.util.ArrayList<>();
-                for (Player p : plugin.getInGame().getPlayersInWorld(currentWorld.getName())) {
-                    int s = plugin.getInGame().getScore(p);
+                for (Player p : currentWorld.getPlayers()) {
+                    int s = RoundManager.scores.getOrDefault(p.getName(), 0);
                     if (s > maxScore) {
                         maxScore = s;
                         winners.clear();
@@ -71,17 +68,29 @@ public class LeaveCommand implements CommandExecutor {
                     }
                 }
                 if (winners.size() == 1) {
-                    worldPlayer.sendMessage("§6获胜者: " + winners.get(0).getName() + " §e得分: " + maxScore);
+                    worldPlayer.sendMessage("§6获胜者: " + winners.get(0).getName());
                 } else {
-                    worldPlayer.sendMessage("§6平局！§e得分: " + maxScore);
+                    worldPlayer.sendMessage("§6平局！");
                 }
-                // 彻底移除玩家，释放世界占用
-                plugin.getInGame().removePlayer(worldPlayer);
                 worldPlayer.sendMessage("§a你已被传送回主城！");
             } else {
                 worldPlayer.sendMessage("§c主城世界不存在！");
             }
         }
+        currentWorld.getPlayers().forEach(player->player.teleport(Bukkit.getWorld(lobbyWorld).getSpawnLocation()));
+        RoundManager.scores.clear();
+    }
+
+    @Override
+    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (!(sender instanceof Player)) {
+            sender.sendMessage("§c只有玩家才能使用此命令！");
+            return true;
+        }
+
+        Player player = (Player) sender;
+        World currentWorld = player.getWorld();
+        endGameForRealLikeDeepseekSTFU(currentWorld);
         return true;
     }
 } 
