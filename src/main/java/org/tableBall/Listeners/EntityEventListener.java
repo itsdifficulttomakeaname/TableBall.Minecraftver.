@@ -311,6 +311,8 @@ public class EntityEventListener implements Listener {
 
         String worldName = player.getWorld().getName();
 
+        if(!inGame.checkAllBallsStatic(event.getPlayer().getWorld().getName())) return;
+
         // 如果既不是当前回合的玩家，又不是母球，就直接return，不做任何提示
         // 检查回合和母球
         if (!plugin.getRoundManager().isCurrentPlayer(worldName, player)&&!hasStrike) {

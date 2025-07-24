@@ -3,6 +3,7 @@ package org.tableBall.Game;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -178,17 +179,46 @@ public class InGame {
      * @param ballData 球数据
      */
     private void spawnBall(String worldName, String ballId, BallData ballData) {
-        Location loc = ballData.location();
-        if (loc.getWorld() == null) {
-            plugin.getLogger().severe("世界不存在：" + worldName);
+        if (ballData == null) {
+            plugin.getLogger().severe("球数据为null: " + ballId);
             return;
+        }
+        
+        Location loc = ballData.location();
+        if (loc == null) {
+            plugin.getLogger().severe("球位置为null: " + ballId);
+            return;
+        }
+        
+        if (loc.getWorld() == null) {
+            // 尝试重新获取世界
+            World world = plugin.getServer().getWorld(worldName);
+            if (world == null) {
+                plugin.getLogger().severe("世界不存在且无法加载: " + worldName);
+                return;
+            }
+            
+            // 使用相同坐标但正确的世界创建新位置
+            loc = new Location(world, loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch());
         }
 
         try {
-            DisplayBall ball = new DisplayBall(loc, ballData.material(), ballData.name, isMotherBallKey(ballId));
+            Material material = ballData.material();
+            if (material == null) {
+                material = Material.STONE;
+                plugin.getLogger().warning("球 " + ballId + " 材质为null，使用默认石头材质");
+            }
+            
+            String name = ballData.name;
+            if (name == null || name.isEmpty()) {
+                name = "球 " + ballId;
+                plugin.getLogger().warning("球 " + ballId + " 名称为null或空，使用默认名称");
+            }
+            
+            DisplayBall ball = new DisplayBall(loc, material, name, isMotherBallKey(ballId));
             addBall(worldName, ball);
-
-            //plugin.getLogger().info("球 ID: " + ballId + " 生成完成！");
+            
+            plugin.getLogger().info("球 ID: " + ballId + " 生成完成！");
         } catch (Exception e) {
             plugin.getLogger().severe("生成球时发生错误！");
             plugin.getLogger().severe("错误信息: " + e.getMessage());
@@ -266,22 +296,24 @@ public class InGame {
         ballInCheckTasks.put(worldName, task);
     }
 
-    public void checkAllBallsStatic(String worldName) {
+    public /*void*/ boolean checkAllBallsStatic(String worldName) {
         Set<DisplayBall> worldBalls = balls.get(worldName);
-        if (worldBalls == null) return;
+        if (worldBalls == null) return false;
 
         boolean allStatic = true;
         for (DisplayBall ball : worldBalls) {
-            // 更严格的静止阈值（0.1）且忽略Y轴速度
-            if (ball.velocity.clone().length() > 0.1) {
+            // 静止阈值（0.2）
+            if (ball.velocity.clone().length() > 0.2) {
                 allStatic = false;
                 break;
             }
         }
 
-        if (allStatic) {
-            plugin.getRoundManager().settleTurn(worldName);
-        }
+//        if (allStatic) {
+//            plugin.getRoundManager().settleTurn(worldName);
+//        }
+
+        return allStatic;
     }
 
     public void checkBallsInHoles(String worldName) {
