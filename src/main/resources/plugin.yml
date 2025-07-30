@@ -8,17 +8,8 @@ commands:
   inviteplayer:
     description: 邀请玩家到指定世界开始游戏
     aliases: [ip]
-    usage: /inviteplayer <玩家> <世界> <类型>
+    usage: /inviteplayer <玩家> <世界> <类型> <对局数>
     permission: tableball.invite
-  scb:
-    description: 控制记分板显示pl
-
-    usage: /scb <e/d>
-    permission: tableball.scoreboard
-  addscore:
-    description: 在自定义模式中添加分数
-    usage: /addscore <分数>
-    permission: tableball.addscore
   leave:
     description: 离开当前游戏并返回大厅
     usage: /leave
@@ -30,16 +21,13 @@ commands:
     description: 切换编辑模式
     usage: /<command> <enable/disable/info>
     permission: tableball.editmode
+  spectategame:
+    description: 观战
+    usage: /spectategame
 
 permissions:
   tableball.invite:
     description: 允许使用/inviteplayer命令
-    default: true
-  tableball.scoreboard:
-    description: 允许使用/scb命令
-    default: true
-  tableball.addscore:
-    description: 允许使用/addscore命令
     default: true
   tableball.leave:
     description: 允许使用/leave命令
@@ -49,6 +37,4 @@ permissions:
     default: op
     children:
       tableball.invite: true
-      tableball.scoreboard: true
-      tableball.addscore: true
       tableball.leave: true

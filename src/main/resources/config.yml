@@ -49,4 +49,7 @@ Inventory:
 # 大厅世界名称
 lobby-world: "world"
 
+# 编辑模式（允许放置和破坏方块）
+editmode: false
+
 # 其他配置...

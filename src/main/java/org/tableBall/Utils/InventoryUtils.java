@@ -12,6 +12,8 @@ import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.NamespacedKey;
 
+import java.util.Arrays;
+
 public class InventoryUtils {
     private final JavaPlugin plugin;
 
@@ -147,5 +149,33 @@ public class InventoryUtils {
         boat.setItemMeta(meta);
         // 由于Bukkit原生API不支持CanPlaceOn，需要监听放置事件时判断
         return boat;
+    }
+
+    /**
+     * 设置玩家在主城的物品栏（包括个人信息物品）
+     * @param player 目标玩家
+     */
+    public void setLobbyInventory(Player player) {
+        if (player == null || !player.isOnline()) return;
+
+        // 清空物品栏
+        player.getInventory().clear();
+
+        // 创建个人信息物品（下届之星，第五格，索引4）
+        ItemStack personalInfoItem = new ItemStack(Material.NETHER_STAR);
+        ItemMeta meta = personalInfoItem.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§f个人信息");
+            meta.setLore(Arrays.asList("§b查看个人信息"));
+
+            // 添加自定义NBT标记
+            PersistentDataContainer pdc = meta.getPersistentDataContainer();
+            pdc.set(new NamespacedKey(plugin, "personal_info"), PersistentDataType.BYTE, (byte) 1);
+
+            personalInfoItem.setItemMeta(meta);
+        }
+
+        // 设置到第五格（索引4）
+        safeSetItem(player, 4, personalInfoItem);
     }
 }

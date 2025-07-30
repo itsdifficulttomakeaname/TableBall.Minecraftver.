@@ -11,6 +11,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 import org.tableBall.Commands.LeaveCommand;
+import org.tableBall.Manager.RoundManager;
 import org.tableBall.TableBall;
 import org.tableBall.Entity.DisplayBall;
 import org.tableBall.Utils.WorldUtils;
@@ -98,7 +99,9 @@ public class InGame {
                     plugin.getLogger().warning("球 " + ballKey + " 缺少NBT配置！");
                     continue;
                 }
-                balls.put(ballKey, new BallData(loc, Material.getMaterial(nbtSection.getString("color", "STONE")), nbtSection.getString("text", "-")));
+                String originalText = nbtSection.getString("text", "-");
+                String processedText = processTextFor8balls(originalText, ballKey);
+                balls.put(ballKey, new BallData(loc, Material.getMaterial(nbtSection.getString("color", "STONE")), processedText));
                 //plugin.getLogger().info("成功加载球 ID: " + ballKey);
             }
             worldBalls.put(worldName, balls);
@@ -320,8 +323,19 @@ public class InGame {
         Set<DisplayBall> worldBalls = balls.get(worldName);
         if (worldBalls == null) return;
 
+        GameData gameData = gameDataMap.get(worldName);
+        String gameType = gameData != null ? gameData.getGameType() : "Standard";
+
         for (DisplayBall ball : new HashSet<>(worldBalls)) {
             if (isBallInHole(ball)) {
+                // 处理进球事件
+                if (gameType.equals("8balls")) {
+                    int ballNumber = extractBallNumberFromDisplayBall(ball);
+                    plugin.getRoundManager().handle8ballsIn(worldName, ballNumber);
+                } else {
+                    plugin.getRoundManager().handleBallIn(worldName, ball.isMotherBall);
+                }
+
                 removeBall(worldName, ball);
                 ball.destroy();
             }
@@ -329,12 +343,135 @@ public class InGame {
     }
 
     /**
+     * 从DisplayBall中提取球号
+     */
+    public int extractBallNumberFromDisplayBall(DisplayBall ball) {
+        if (ball.isMotherBall) {
+            plugin.getLogger().info("球号提取: 母球，返回0");
+            return 0; // 母球
+        }
+
+        // 从球的名称中提取球号
+        String name = ball.text;
+        if (name != null) {
+            int ballNumber = extractBallNumberFromText(name);
+            plugin.getLogger().info("球号提取: 文本='" + name + "', 提取结果=" + ballNumber);
+            return ballNumber;
+        }
+        plugin.getLogger().warning("球号提取失败: 球文本为null");
+        return -1; // 无法识别
+    }
+
+    /**
+     * 从文本中提取球号，支持多种格式
+     * @param text 球的文本
+     * @return 球号，如果无法提取则返回-1
+     */
+    private int extractBallNumberFromText(String text) {
+        if (text == null || text.isEmpty()) {
+            return -1;
+        }
+
+        // 移除所有颜色代码
+        String cleanText = text.replaceAll("§[0-9a-fA-F]", "");
+
+        // 如果是母球的文本表示
+        if (cleanText.equals("0") || cleanText.equals("母球")) {
+            return 0;
+        }
+
+        // 提取数字
+        try {
+            String numberStr = cleanText.replaceAll("[^0-9]", "");
+            if (!numberStr.isEmpty()) {
+                int ballNumber = Integer.parseInt(numberStr);
+                // 验证球号范围
+                if (ballNumber >= 0 && ballNumber <= 15) {
+                    return ballNumber;
+                }
+            }
+        } catch (NumberFormatException e) {
+            plugin.getLogger().warning("球号解析失败: " + text + " -> " + cleanText);
+        }
+
+        return -1; // 无法识别
+    }
+
+    /**
      * 结束游戏
      * @param worldName 世界名称
      */
     public void endGame(String worldName) {
+        World world = Bukkit.getWorld(worldName);
+        if (world == null) return;
 
-        LeaveCommand.endGameForRealLikeDeepseekSTFU(Bukkit.getWorld(worldName));
+        List<Player> playersInWorld = getPlayersInWorld(worldName);
+
+        // 显示正常结算信息
+        GameData gameData = gameDataMap.get(worldName);
+        String gameType = gameData != null ? gameData.getGameType() : "Standard";
+
+        // 记录游戏结果到数据库
+        recordGameResults(worldName, playersInWorld, gameType, false);
+
+        for (Player worldPlayer : world.getPlayers()) {
+            worldPlayer.sendMessage("§e结算信息:");
+
+            if (gameType.equals("8balls")) {
+                // 8balls模式显示局数
+                org.tableBall.Game.GameState gameState = plugin.getRoundManager().getGameState(worldName);
+                if (gameState != null) {
+                    for (Player p : playersInWorld) {
+                        if (p.getScoreboardTags().contains("tableball_ingame")) {
+                            int wins = gameState.getRoundWins(p);
+                            worldPlayer.sendMessage("§b" + p.getName() + ": §a" + wins + "胜");
+                        }
+                    }
+
+                    // 判定获胜者
+                    Player winner = gameState.getOverallWinner();
+                    if (winner != null) {
+                        worldPlayer.sendMessage("§6获胜者：" + winner.getName());
+                    }
+                }
+            } else {
+                // 标准模式显示分数
+                for (Player p : playersInWorld) {
+                    if (p.getScoreboardTags().contains("tableball_ingame")) {
+                        int s = RoundManager.scores.getOrDefault(p.getName(), 0);
+                        worldPlayer.sendMessage("§b" + p.getName() + ": §a" + s);
+                    }
+                }
+
+                // 判定获胜者
+                Player winner = null;
+                int maxScore = -1;
+                boolean tie = false;
+
+                for (Player p : playersInWorld) {
+                    if (p.getScoreboardTags().contains("tableball_ingame")) {
+                        int score = RoundManager.scores.getOrDefault(p.getName(), 0);
+                        if (score > maxScore) {
+                            maxScore = score;
+                            winner = p;
+                            tie = false;
+                        } else if (score == maxScore) {
+                            tie = true;
+                        }
+                    }
+                }
+
+                if (tie) {
+                    worldPlayer.sendMessage("§6获胜者：平局");
+                } else if (winner != null) {
+                    worldPlayer.sendMessage("§6获胜者：" + winner.getName());
+                }
+            }
+
+            worldPlayer.sendMessage("§a你已被传送回主城！");
+        }
+
+        LeaveCommand.endGameForRealLikeDeepseekSTFU(world);
     }
 
     /**
@@ -397,12 +534,24 @@ public class InGame {
      */
     public void removePlayer(Player player) {
         String worldName = player.getWorld().getName();
+        
+        // 从playersInGame中移除
         Set<Player> players = playersInGame.get(worldName);
         if (players != null) {
             players.remove(player);
             if (players.isEmpty()) {
                 playersInGame.remove(worldName);
-                clearBalls(worldName);
+            }
+        }
+        
+        // 从gameDataMap中移除
+        GameData gameData = gameDataMap.get(worldName);
+        if (gameData != null) {
+            gameData.getPlayers().remove(player);
+            gameData.getScores().remove(player);
+            gameData.getRounds().remove(player);
+            if (gameData.getPlayers().isEmpty()) {
+                gameDataMap.remove(worldName);
             }
         }
     }
@@ -416,7 +565,7 @@ public class InGame {
         if (gameDataMap.containsKey(worldName)) {
             return gameDataMap.get(worldName).getGameType();
         }
-        return null;
+        return "Standard"; // 默认返回Standard
     }
 
     /**
@@ -470,6 +619,22 @@ public class InGame {
     }
 
     /**
+     * 设置游戏数据
+     * @param worldName 世界名称
+     * @param players 玩家列表
+     * @param gameType 游戏类型
+     */
+    public void setGameData(String worldName, List<Player> players, String gameType) {
+        GameData gameData = new GameData(new ArrayList<>(players), gameType);
+        for (Player player : players) {
+            gameData.getScores().put(player, 0);
+            gameData.getRounds().put(player, 1);
+        }
+        gameDataMap.put(worldName, gameData);
+        plugin.getLogger().info("设置游戏数据: 世界=" + worldName + ", 类型=" + gameType + ", 玩家数=" + players.size());
+    }
+
+    /**
      * 将玩家添加到游戏中
      * @param player 玩家
      * @param worldName 世界名称
@@ -493,11 +658,29 @@ public class InGame {
      */
     public List<String> getAllWorldNamesFromBallsConfig() {
         List<String> worldNames = new ArrayList<>();
-        if (ballsConfig == null) return worldNames;
-        ConfigurationSection worlds = ballsConfig.getConfigurationSection("");
-        if (worlds == null) return worldNames;
-        for (String worldName : worlds.getKeys(false)) {
-            worldNames.add(worldName);
+        try {
+            if (ballsConfig == null) {
+                plugin.getLogger().warning("balls.yml配置文件未加载");
+                return worldNames;
+            }
+
+            ConfigurationSection worlds = ballsConfig.getConfigurationSection("");
+            if (worlds == null) {
+                plugin.getLogger().warning("balls.yml配置文件为空或格式错误");
+                return worldNames;
+            }
+
+            for (String worldName : worlds.getKeys(false)) {
+                // 验证世界配置是否完整
+                ConfigurationSection worldSection = worlds.getConfigurationSection(worldName);
+                if (worldSection != null && worldSection.contains("balls")) {
+                    worldNames.add(worldName);
+                } else {
+                    plugin.getLogger().warning("世界 " + worldName + " 的配置不完整，跳过");
+                }
+            }
+        } catch (Exception e) {
+            plugin.getLogger().severe("读取balls.yml配置时出错: " + e.getMessage());
         }
         return worldNames;
     }
@@ -507,6 +690,71 @@ public class InGame {
      */
     public static boolean isMotherBallKey(String key) {
         return key != null && (key.equals("母球") || key.equals("0"));
+    }
+
+    /**
+     * 处理8balls模式的球文本显示
+     * @param originalText 原始文本
+     * @param ballKey 球的键名
+     * @return 处理后的文本
+     */
+    private String processTextFor8balls(String originalText, String ballKey) {
+        // 移除颜色代码
+        String cleanText = originalText.replaceAll("§[0-9a-fA-F]", "");
+
+        // 如果是母球，不添加颜色标识
+        if (isMotherBallKey(ballKey)) {
+            return originalText; // 保持原始文本
+        }
+
+        // 尝试从球键名或文本中提取球号
+        int ballNumber = extractBallNumberFromText(originalText);
+        if (ballNumber == -1) {
+            // 如果从文本提取失败，尝试从键名提取
+            ballNumber = extractBallNumberFromText(ballKey);
+        }
+
+        if (ballNumber >= 1 && ballNumber <= 7) {
+            // 红色球 (1-7)
+            return originalText + "§c■■■";
+        } else if (ballNumber >= 9 && ballNumber <= 15) {
+            // 蓝色球 (9-15)
+            return originalText + "§9■■■";
+        } else if (ballNumber == 8) {
+            // 黑色球 (8)
+            return originalText + "§0■■■";
+        }
+
+        // 默认返回原文本
+        return originalText;
+    }
+
+
+
+    /**
+     * 获取指定世界的母球
+     * @param worldName 世界名称
+     * @return 母球DisplayBall，如果没有找到则返回null
+     */
+    public DisplayBall getMotherBall(String worldName) {
+        for (DisplayBall ball : DisplayBall.displayBalls) {
+            if (ball.getWorld().equals(worldName) && ball.isMotherBall) {
+                return ball;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 移除指定世界的母球
+     * @param worldName 世界名称
+     */
+    public void removeMotherBall(String worldName) {
+        DisplayBall motherBall = getMotherBall(worldName);
+        if (motherBall != null) {
+            motherBall.destroy();
+            plugin.getLogger().info("移除母球: 世界=" + worldName);
+        }
     }
 
     /**
@@ -630,9 +878,89 @@ public class InGame {
         motherBalls.put(worldName, ball);
     }
 
-    public DisplayBall getMotherBall(String worldName) {
-        return motherBalls.get(worldName);
+    /**
+     * 记录游戏结果到数据库
+     * @param worldName 世界名称
+     * @param players 参与游戏的玩家
+     * @param gameType 游戏类型
+     * @param isForfeit 是否是弃权结束
+     */
+    public void recordGameResults(String worldName, List<Player> players, String gameType, boolean isForfeit) {
+        if (players.isEmpty()) return;
+
+        if (gameType.equals("8balls")) {
+            // 8balls模式：根据局数判定获胜者
+            org.tableBall.Game.GameState gameState = plugin.getRoundManager().getGameState(worldName);
+            if (gameState != null) {
+                Player winner = gameState.getOverallWinner();
+
+                for (Player player : players) {
+                    if (player.getScoreboardTags().contains("tableball_ingame")) {
+                        if (isForfeit) {
+                            // 弃权情况：弃权者记录为弃权失败，对方记录为获胜
+                            if (player.equals(winner)) {
+                                plugin.getPlayerDataManager().recordGameResult(player, gameType, "win");
+                            } else {
+                                plugin.getPlayerDataManager().recordGameResult(player, gameType, "forfeit");
+                            }
+                        } else {
+                            // 正常结束：获胜者记录获胜，失败者记录失败
+                            if (player.equals(winner)) {
+                                plugin.getPlayerDataManager().recordGameResult(player, gameType, "win");
+                            } else {
+                                plugin.getPlayerDataManager().recordGameResult(player, gameType, "lose");
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // 标准模式：根据分数判定获胜者
+            Player winner = null;
+            int maxScore = -1;
+            boolean tie = false;
+
+            for (Player p : players) {
+                if (p.getScoreboardTags().contains("tableball_ingame")) {
+                    int score = RoundManager.scores.getOrDefault(p.getName(), 0);
+                    if (score > maxScore) {
+                        maxScore = score;
+                        winner = p;
+                        tie = false;
+                    } else if (score == maxScore) {
+                        tie = true;
+                    }
+                }
+            }
+
+            for (Player player : players) {
+                if (player.getScoreboardTags().contains("tableball_ingame")) {
+                    if (tie) {
+                        // 平局：所有人记录为失败
+                        plugin.getPlayerDataManager().recordGameResult(player, gameType, "lose");
+                    } else if (isForfeit) {
+                        // 弃权情况
+                        if (player.equals(winner)) {
+                            plugin.getPlayerDataManager().recordGameResult(player, gameType, "win");
+                        } else {
+                            plugin.getPlayerDataManager().recordGameResult(player, gameType, "forfeit");
+                        }
+                    } else {
+                        // 正常结束
+                        if (player.equals(winner)) {
+                            plugin.getPlayerDataManager().recordGameResult(player, gameType, "win");
+                        } else {
+                            plugin.getPlayerDataManager().recordGameResult(player, gameType, "lose");
+                        }
+                    }
+                }
+            }
+        }
     }
+
+//    public DisplayBall getMotherBall(String worldName) {
+//        return motherBalls.get(worldName);
+//    }
 
     public void addBall(String worldName, DisplayBall ball) {
         balls.computeIfAbsent(worldName, k -> new HashSet<>()).add(ball);

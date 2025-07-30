@@ -3,32 +3,212 @@ world1:
   ball_size: 2.0 # double类型记录法
   restitution: 0.8 #1为完全弹性碰撞
   balls:
-    ball1:
+    0:
       loc:
-        x: 0.0
-        y: 64.0
-        z: 0.0
+        x: 0.5
+        y: 65.0
+        z: -19.5
+        yaw: 0.0
+        pitch: 0.0
       nbt:
-        color: RED_TERRACOTTA
-        text: "球1"
-    ball2:
+        color: WHITE_TERRACOTTA
+        text: "§a0"
+    1:
       loc:
-        x: 5.0
-        y: 64.0
-        z: 5.0
+        x: 0.5
+        y: 65.0
+        z: 10.5
+        yaw: 0.0
+        pitch: 0.0
       nbt:
-        color: BLUE_TERRACOTTA
-        text: "球2"
+        color: YELLOW_TERRACOTTA
+        text: "§a1"
+    2:
+      loc:
+        x: 2.5
+        y: 65.0
+        z: 13.5
+        yaw: 0.0
+        pitch: 0.0
+      nbt:
+        color: YELLOW_TERRACOTTA
+        text: "§a2"
+    3:
+      loc:
+        x: -1.5
+        y: 65.0
+        z: 13.5
+        yaw: 0.0
+        pitch: 0.0
+      nbt:
+        color: YELLOW_TERRACOTTA
+        text: "§a3"
+    4:
+      loc:
+        x: 3.5
+        y: 65.0
+        z: 16.5
+        yaw: 0.0
+        pitch: 0.0
+      nbt:
+        color: BROWN_TERRACOTTA
+        text: "§a4"
+    5:
+      loc:
+        x: -2.5
+        y: 65.0
+        z: 16.5
+        yaw: 0.0
+        pitch: 0.0
+      nbt:
+        color: BROWN_TERRACOTTA
+        text: "§a5"
+    6:
+      loc:
+        x: 5.5
+        y: 65.0
+        z: 19.5
+        yaw: 0.0
+        pitch: 0.0
+      nbt:
+        color: YELLOW_TERRACOTTA
+        text: "§a6"
+    7:
+      loc:
+        x: 2.5
+        y: 65.0
+        z: 19.5
+        yaw: 0.0
+        pitch: 0.0
+      nbt:
+        color: BROWN_TERRACOTTA
+        text: "§a7"
+    8:
+      loc:
+        x: 0.5
+        y: 65.0
+        z: 16.5
+        yaw: 0.0
+        pitch: 0.0
+      nbt:
+        color: BLACK_TERRACOTTA
+        text: "§e8"
+    9:
+      loc:
+        x: -1.5
+        y: 65.0
+        z: 19.5
+        yaw: 0.0
+        pitch: 0.0
+      nbt:
+        color: BROWN_TERRACOTTA
+        text: "§a9"
+    10:
+      loc:
+        x: -4.5
+        y: 65.0
+        z: 19.5
+        yaw: 0.0
+        pitch: 0.0
+      nbt:
+        color: YELLOW_TERRACOTTA
+        text: "§a10"
+    11:
+      loc:
+        x: 6.5
+        y: 65.0
+        z: 22.5
+        yaw: 0.0
+        pitch: 0.0
+      nbt:
+        color: BROWN_TERRACOTTA
+        text: "§a11"
+    12:
+      loc:
+        x: 3.5
+        y: 65.0
+        z: 22.5
+        yaw: 0.0
+        pitch: 0.0
+      nbt:
+        color: YELLOW_TERRACOTTA
+        text: "§a12"
+    13:
+      loc:
+        x: 0.5
+        y: 65.0
+        z: 22.5
+        yaw: 0.0
+        pitch: 0.0
+      nbt:
+        color: BROWN_TERRACOTTA
+        text: "§a13"
+    14:
+      loc:
+        x: -2.5
+        y: 65.0
+        z: 22.5
+        yaw: 0.0
+        pitch: 0.0
+      nbt:
+        color: YELLOW_TERRACOTTA
+        text: "§a14"
+    15:
+      loc:
+        x: -5.5
+        y: 65.0
+        z: 22.5
+        yaw: 0.0
+        pitch: 0.0
+      nbt:
+        color: BROWN_TERRACOTTA
+        text: "§a15"
   holes:
     y: 62
-    hole1: # 没有命名要求，不重复即可
-      #洞的两点极坐标，不考虑y，(x1, z1)和(x2, z2)
+    hole1:
       x1: 16
+      y1: 63
       z1: 30
       x2: 13
+      y2: 62
       z2: 27
-  bounds: # 务必保证x2>x1,z2>z1
-    x1: 16
-    z1: 30
-    x2: -16
-    z2: -30
+    hole2:
+      x1: -16
+      y1: 63
+      z1: 30
+      x2: -13
+      y2: 62
+      z2: 27
+    hole3:
+      x1: -16
+      y1: 62
+      z1: 2
+      x2: -13
+      y2: 63
+      z2: -2
+    hole4:
+      x1: -16
+      y1: 63
+      z1: -27
+      x2: -13
+      y2: 62
+      z2: -30
+    hole5:
+      x1: 13
+      y1: 63
+      z1: -30
+      x2: 16
+      y2: 62
+      z2: -27
+    hole6:
+      x1: 16
+      y1: 63
+      z1: -2
+      x2: 13
+      y2: 62
+      z2: 2
+  bounds:
+    x1: -15
+    z1: -29
+    x2: 15
+    z2: 29

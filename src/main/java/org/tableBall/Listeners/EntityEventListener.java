@@ -1,10 +1,7 @@
 package org.tableBall.Listeners;
 
 import cn.jason31416.planetlib.hook.NbtHook;
-import org.bukkit.Bukkit;
-import org.bukkit.Location;
-import org.bukkit.Material;
-import org.bukkit.Sound;
+import org.bukkit.*;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
@@ -12,6 +9,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.player.*;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Vector;
@@ -22,6 +20,8 @@ import org.bukkit.event.block.Action;
 import org.tableBall.Entity.DisplayBall;
 import org.tableBall.Commands.EditModeCommand;
 import org.bukkit.configuration.ConfigurationSection;
+import org.tableBall.Manager.PlayerDataManager;
+import org.tableBall.Utils.InventoryUtils;
 
 import java.util.*;
 
@@ -81,6 +81,15 @@ public class EntityEventListener implements Listener {
     private static void handleBallCollision(DisplayBall ball1, DisplayBall ball2) {
         if (ball1.isFalling || ball2.isFalling) return;
 
+        // 只在8balls模式下检查犯规
+        String worldName = ball1.getWorld();
+        if (worldName != null && plugin != null) {
+            String gameType = plugin.getInGame().getGameType(worldName);
+            if ("8balls".equals(gameType)) {
+                check8ballsFoul(ball1, ball2);
+            }
+        }
+
         Vector deltaPos = ball1.location.toVector().subtract(ball2.location.toVector());
         Vector normal = deltaPos.normalize();
         Vector relativeVel = ball1.velocity.clone().subtract(ball2.velocity.clone()); // 相对速度
@@ -90,8 +99,8 @@ public class EntityEventListener implements Listener {
         ball1.velocity.subtract(normal.clone().multiply(impulse));
         ball2.velocity.add(normal.clone().multiply(impulse));
 
-        // 防止重叠 (可选)
-        double overlap = (ball1.getRadius() + ball2.getRadius()) - deltaPos.length();
+        // 防止重叠
+        double overlap = Math.sqrt(2) - deltaPos.length();
         if (overlap > 0) {
             Vector correction = normal.clone().multiply(overlap * 0.5);
             ball1.location.add(correction);
@@ -113,6 +122,99 @@ public class EntityEventListener implements Listener {
                 );
             }
         }
+    }
+
+    /**
+     * 检查8balls模式的犯规
+     */
+    private static void check8ballsFoul(DisplayBall ball1, DisplayBall ball2) {
+        if (plugin == null) return;
+
+        String worldName = ball1.getWorld();
+        if (worldName == null) return;
+
+        org.tableBall.Game.GameState gameState = plugin.getRoundManager().getGameState(worldName);
+        if (gameState == null || !gameState.getGameType().equals("8balls")) return;
+
+        Player currentPlayer = plugin.getRoundManager().getCurrentPlayer(worldName);
+        if (currentPlayer == null) return;
+
+        // 确定哪个是母球，哪个是目标球
+        DisplayBall motherBall = null;
+        DisplayBall targetBall = null;
+
+        if (ball1.isMotherBall) {
+            motherBall = ball1;
+            targetBall = ball2;
+        } else if (ball2.isMotherBall) {
+            motherBall = ball2;
+            targetBall = ball1;
+        } else {
+            return; // 两个都不是母球，不需要检查犯规
+        }
+
+        // 只检查第一个击中的球
+        if (gameState.hasFirstBallHit()) {
+            return; // 已经检查过第一个球了
+        }
+
+        gameState.setFirstBallHit(true);
+
+        // 检查第一个击中的球是否正确
+        String playerColor = gameState.getPlayerColor(currentPlayer);
+        if (!"none".equals(playerColor)) {
+            int targetBallNumber = plugin.getInGame().extractBallNumberFromDisplayBall(targetBall);
+            boolean isCorrectBall = false;
+
+            if ("red".equals(playerColor)) {
+                isCorrectBall = (targetBallNumber >= 1 && targetBallNumber <= 7);
+            } else if ("blue".equals(playerColor)) {
+                isCorrectBall = (targetBallNumber >= 9 && targetBallNumber <= 15);
+            }
+
+            // 如果玩家的色球都打完了，可以打黑8
+            if (!isCorrectBall && targetBallNumber == 8) {
+                isCorrectBall = hasFinishedColorBalls(worldName, currentPlayer, playerColor);
+            }
+
+            gameState.setFirstBallCorrect(isCorrectBall);
+
+            if (!isCorrectBall) {
+                // 设置待处理的犯规，等球停下来再处理
+                gameState.setPendingInfraction("第一球击中错误目标");
+            }
+        }
+    }
+
+    /**
+     * 检查玩家是否已经打完了自己的色球
+     */
+    private static boolean hasFinishedColorBalls(String worldName, Player player, String playerColor) {
+        if ("red".equals(playerColor)) {
+            // 检查场上是否还有1-7号球
+            return !hasColorBallsOnTable(worldName, 1, 7);
+        } else if ("blue".equals(playerColor)) {
+            // 检查场上是否还有9-15号球
+            return !hasColorBallsOnTable(worldName, 9, 15);
+        }
+        return false;
+    }
+
+    /**
+     * 检查场上是否还有指定范围的球
+     */
+    private static boolean hasColorBallsOnTable(String worldName, int minNumber, int maxNumber) {
+        if (plugin == null) return false;
+
+        for (DisplayBall ball : DisplayBall.displayBalls) {
+            if (ball.getWorld().equals(worldName) && !ball.isMotherBall) {
+                int ballNumber = plugin.getInGame().extractBallNumberFromDisplayBall(ball);
+                if (ballNumber >= minNumber && ballNumber <= maxNumber) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
 /*
@@ -240,9 +342,15 @@ public class EntityEventListener implements Listener {
     @SuppressWarnings("deprecation")
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
+        String lobbyWorld = plugin.getConfig().getString("lobby-world", "world");
         Player player = event.getPlayer();
         event.setJoinMessage("§a [台球厅]  §r欢迎玩家 §6" + player.getName() + "§r 来到台球厅！");
 
+        player.teleport(Bukkit.getWorld(lobbyWorld).getSpawnLocation());
+        player.setGameMode(GameMode.SURVIVAL);
+
+        // 设置主城物品栏
+        new InventoryUtils(plugin).setLobbyInventory(player);
     }
 
     @SuppressWarnings("deprecation")
@@ -255,7 +363,6 @@ public class EntityEventListener implements Listener {
         }
 
         event.setQuitMessage("§a [台球厅]  §r玩家 §6" + player.getName() + "§r 离开了台球厅！");
-
     }
 
     @EventHandler
@@ -298,6 +405,31 @@ public class EntityEventListener implements Listener {
         event.setCancelled(true);
     }
 
+    @EventHandler
+    public void onPlayerInteractPersonalInfo(PlayerInteractEvent event) {
+        if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
+
+        Player player = event.getPlayer();
+        ItemStack item = player.getInventory().getItemInMainHand();
+
+        if (item == null || item.getType() != Material.NETHER_STAR) return;
+
+        // 检查是否是个人信息物品
+        if (item.hasItemMeta() && item.getItemMeta().getPersistentDataContainer()
+                .has(new NamespacedKey(plugin, "personal_info"), PersistentDataType.BYTE)) {
+
+            // 检查玩家是否在主城
+            String lobbyWorld = plugin.getConfig().getString("lobby-world", "world");
+            if (!player.getWorld().getName().equals(lobbyWorld)) {
+                return; // 不在主城，不处理
+            }
+
+            // 显示个人信息
+            showPersonalInfo(player);
+            event.setCancelled(true);
+        }
+    }
+
 
 
     @EventHandler
@@ -312,6 +444,14 @@ public class EntityEventListener implements Listener {
         String worldName = player.getWorld().getName();
 
         if(!inGame.checkAllBallsStatic(event.getPlayer().getWorld().getName())) return;
+
+        // 检查玩家是否空手（优先级最低的检查）
+        ItemStack mainHandItem = player.getInventory().getItemInMainHand();
+        if (mainHandItem == null || mainHandItem.getType() == Material.AIR) {
+            player.sendMessage("§c请手持球杆击球！");
+            event.setCancelled(true);
+            return;
+        }
 
         // 如果既不是当前回合的玩家，又不是母球，就直接return，不做任何提示
         // 检查回合和母球
@@ -329,7 +469,7 @@ public class EntityEventListener implements Listener {
 
         // 计算击球方向
         Vector direction = player.getLocation().getDirection().normalize();
-        double knockbackLevel = player.getInventory().getItemInMainHand().getEnchantmentLevel(Enchantment.KNOCKBACK);
+        double knockbackLevel = mainHandItem.getEnchantmentLevel(Enchantment.KNOCKBACK);
         Vector velocity = direction.multiply(0.33 * (knockbackLevel + 1)).setY(0);
 
         // 应用速度（确保立即生效）
@@ -351,6 +491,39 @@ public class EntityEventListener implements Listener {
             }
         }
         return null;
+    }
+
+    /**
+     * 显示玩家个人信息
+     * @param player 玩家
+     */
+    private void showPersonalInfo(Player player) {
+        PlayerDataManager dataManager = plugin.getPlayerDataManager();
+        var statsMap = dataManager.getPlayerStats(player);
+
+        player.sendMessage("§a个人信息：");
+
+        if (statsMap.isEmpty()) {
+            player.sendMessage("§7暂无游戏记录");
+            return;
+        }
+
+        // 按照指定格式输出每个模式的信息
+        for (var entry : statsMap.entrySet()) {
+            String gameMode = entry.getKey();
+            PlayerDataManager.PlayerStats stats = entry.getValue();
+
+            player.sendMessage("§f\"" + gameMode + "\" 的总次数: " + stats.getTotalGames() +
+                             " (游玩该模式的总次数)");
+            player.sendMessage("§f\"" + gameMode + "\" 的获胜次数: " + stats.getWins() +
+                             " (游玩该模式的获胜次数)");
+            player.sendMessage("§f\"" + gameMode + "\" 的失败次数:");
+            player.sendMessage("§f    个人弃权: " + stats.getForfeitLosses() +
+                             " (弃权而输的次数)");
+            player.sendMessage("§f    对方获胜: " + stats.getOpponentWins() +
+                             " (对方战胜的次数)");
+            player.sendMessage(""); // 空行分隔
+        }
     }
 
     private static float loudnessProcess(double vel, double maxVel){

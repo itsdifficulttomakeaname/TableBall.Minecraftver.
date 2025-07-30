@@ -31,11 +31,13 @@ public class InviteCommand implements CommandExecutor, TabCompleter {
         public final String gameType;
         public final Player inviter;
         public final long expireTime;
-        public InviteData(String worldName, String gameType, Player inviter, long expireTime) {
+        public final int rounds;
+        public InviteData(String worldName, String gameType, Player inviter, long expireTime, int rounds) {
             this.worldName = worldName;
             this.gameType = gameType;
             this.inviter = inviter;
             this.expireTime = expireTime;
+            this.rounds = rounds;
         }
     }
 
@@ -52,8 +54,8 @@ public class InviteCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
-        if (args.length != 3) {
-            sender.sendMessage("§c用法: /inviteplayer <玩家> <世界> <类型>");
+        if (args.length != 4) {
+            sender.sendMessage("§c用法: /inviteplayer <玩家> <世界> <类型> <对局数>");
             return true;
         }
 
@@ -61,10 +63,24 @@ public class InviteCommand implements CommandExecutor, TabCompleter {
         String targetPlayerName = args[0];
         String worldName = args[1];
         String gameType = args[2];
+        String roundsStr = args[3];
 
         // 检查游戏类型
-        if (!gameType.equals("Standard") && !gameType.equals("Custom")) {
-            sender.sendMessage("§c无效的游戏类型！请使用 Standard 或 Custom");
+        if (!gameType.equals("Standard") && !gameType.equals("8balls")) {
+            sender.sendMessage("§c无效的游戏类型！请使用 Standard 或 8balls");
+            return true;
+        }
+
+        // 检查对局数
+        int rounds;
+        try {
+            rounds = Integer.parseInt(roundsStr);
+            if (rounds % 2 == 0) {
+                sender.sendMessage("§c对局数无效！只能是奇数");
+                return true;
+            }
+        } catch (NumberFormatException e) {
+            sender.sendMessage("§c对局数必须是数字！");
             return true;
         }
 
@@ -101,8 +117,8 @@ public class InviteCommand implements CommandExecutor, TabCompleter {
 
         // 发送邀请
         long expire = System.currentTimeMillis() + 60_000L;
-        inviteMap.put(targetPlayer.getUniqueId(), new InviteData(worldName, gameType, player, expire));
-        Component msg = Component.text("玩家 " + player.getName() + " 向你发出了申请: " + worldName + " ")
+        inviteMap.put(targetPlayer.getUniqueId(), new InviteData(worldName, gameType, player, expire, rounds));
+        Component msg = Component.text("玩家 " + player.getName() + " 向你发出了申请: " + worldName + " (" + gameType + ", " + rounds + "局)")
                 .append(Component.text("[点击接受]")
                         .clickEvent(ClickEvent.runCommand("/acceptinvite"))
                         .hoverEvent(HoverEvent.showText(Component.text("点击同意，1分钟内有效"))));
@@ -126,14 +142,20 @@ public class InviteCommand implements CommandExecutor, TabCompleter {
             // 世界名称补全（动态读取balls.yml）
             List<String> worldNames = inGame.getAllWorldNamesFromBallsConfig();
             for (String name : worldNames) {
-                if (!name.equalsIgnoreCase("world")) {
+                // 排除主世界，只显示台球世界
+                String lobbyWorld = plugin.getConfig().getString("lobby-world", "world");
+                if (!name.equalsIgnoreCase(lobbyWorld)) {
                     completions.add(name);
                 }
             }
         } else if (args.length == 3) {
             // 游戏类型补全
             completions.add("Standard");
-            completions.add("Custom");
+            completions.add("8balls");
+        } else if (args.length == 4) {
+            // 对局数补全
+            completions.add("3");
+            completions.add("5");
         }
 
         return completions;
@@ -162,7 +184,7 @@ public class InviteCommand implements CommandExecutor, TabCompleter {
         players.add(data.inviter);
         players.add(player);
         player.setAllowFlight(true);
-        new Start(plugin, plugin.getWorldUtils(), plugin.getInGame()).startGame(data.worldName, players, data.gameType); // 当前暂未支持同时多把对局
+        new Start(plugin, plugin.getWorldUtils(), plugin.getInGame()).startGame(data.worldName, players, data.gameType, data.rounds); // 当前暂未支持同时多把对局
         inviteMap.remove(player.getUniqueId());
         return true;
     }

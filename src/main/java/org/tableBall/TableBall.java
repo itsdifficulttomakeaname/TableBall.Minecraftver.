@@ -12,14 +12,16 @@ import org.tableBall.Game.InGame;
 import org.tableBall.Game.End;
 import org.tableBall.Manager.RoundManager;
 import org.tableBall.Listeners.EntityEventListener;
+import org.tableBall.Listeners.BlockEventListener;
 import org.tableBall.Manager.ScoreBoardManager;
+import org.tableBall.Manager.PlayerDataManager;
 import org.tableBall.Utils.WorldUtils;
-import org.tableBall.Commands.ScoreBoardCommand;
 
 import java.io.File;
 import java.util.ArrayList;
 
 public final class TableBall extends JavaPlugin {
+    public static TableBall instance;
     public static final NamespacedKey BALL_ID_KEY = new NamespacedKey("tableball", "ball_id");
     public static final NamespacedKey BALL_WORLD_KEY = new NamespacedKey("tableball", "ball_world");
 
@@ -29,11 +31,12 @@ public final class TableBall extends JavaPlugin {
     private ScoreBoardManager scoreBoardManager;
     private RoundManager roundManager;
     private EntityEventListener entityEventListener;
+    private PlayerDataManager playerDataManager;
     private GameState gamestate;
-    private DisplayBall displayBall;
 
     @Override
     public void onEnable() {
+        instance=this;
         PlanetLib.initialize(this, Required.NBT);
 
         // 保存默认配置
@@ -41,17 +44,19 @@ public final class TableBall extends JavaPlugin {
         saveResource("balls.yml", false);
         saveResource("scoreboard.yml", false);
 
+        // 初始化DisplayBall的静态plugin字段
+        DisplayBall.plugin = this;
+
         // 初始化管理器
         this.worldUtils = new WorldUtils(this);
         this.scoreBoardManager = new ScoreBoardManager(this);
+        this.playerDataManager = new PlayerDataManager(this);
         this.inGame = new InGame(this, worldUtils);
         this.end = new End(this, scoreBoardManager);
         this.roundManager = new RoundManager(this);
 
         // 注册命令
         getCommand("inviteplayer").setExecutor(new InviteCommand(this));
-        getCommand("scb").setExecutor(new ScoreBoardCommand(scoreBoardManager));
-        getCommand("addscore").setExecutor(new AddScoreCommand(scoreBoardManager));
         getCommand("leave").setExecutor(new LeaveCommand(this));
         getCommand("acceptinvite").setExecutor((sender, command, label, args) -> {
             if (!(sender instanceof org.bukkit.entity.Player)) {
@@ -61,13 +66,13 @@ public final class TableBall extends JavaPlugin {
             return org.tableBall.Commands.InviteCommand.handleAcceptInvite((org.bukkit.entity.Player) sender, this);
         });
         getCommand("editmode").setExecutor(new EditModeCommand(this));
+        getCommand("spectategame").setExecutor(new SpectateCommand());
 
         // 注册监听器
         EntityEventListener entityEventListener = new EntityEventListener(this, inGame);
         getServer().getPluginManager().registerEvents(entityEventListener, this);
+        getServer().getPluginManager().registerEvents(new BlockEventListener(this), this);
         setEntityEventListener(entityEventListener);
-
-        DisplayBall.plugin = this;
 
         // 注册桌球物理管理器
         /*
@@ -119,6 +124,10 @@ public final class TableBall extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        // 关闭数据库连接
+        if (playerDataManager != null) {
+            playerDataManager.closeConnection();
+        }
         getLogger().info("TableBall 插件已禁用！");
     }
 
@@ -154,7 +163,7 @@ public final class TableBall extends JavaPlugin {
         return this.gamestate;
     }
 
-    public DisplayBall getDisplayBall(){
-        return this.displayBall;
+    public PlayerDataManager getPlayerDataManager() {
+        return playerDataManager;
     }
 }

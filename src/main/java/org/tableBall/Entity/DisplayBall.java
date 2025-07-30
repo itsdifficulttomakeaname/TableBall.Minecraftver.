@@ -27,36 +27,59 @@ public class DisplayBall {
     public Vector velocity;
     public UUID uuid;
     public boolean isMotherBall=false;
-    public final double FRICTION = plugin.getInGame().ballsConfig.getDouble(getWorld() + ".friction")/100.0; // 0.6% 摩擦力
+    public double FRICTION;
     public static final double MIN_SPEED = 0.2; // 最小速度阈值
-    public final double BALL_SIZE = plugin.getInGame().ballsConfig.getDouble(getWorld() + ".ball_size"); // 球的大小
-    private double radius = BALL_SIZE / 2;
+    public double BALL_SIZE; // 球的大小
+    private boolean isJudging;
 
     public boolean isFalling = false;
 
     public DisplayBall(Location location, Material color, String text, boolean isMotherBall) {
+        // 检查插件实例是否已初始化
+        if (plugin == null) {
+            throw new IllegalStateException("DisplayBall.plugin 未初始化！请确保在使用DisplayBall前初始化plugin字段。");
+        }
+        
+        // 检查位置参数
+        if (location == null) {
+            throw new IllegalArgumentException("Location不能为null");
+        }
+        
+        if (location.getWorld() == null) {
+            throw new IllegalArgumentException("Location的世界不能为null");
+        }
+        
         this.location = location.clone();
-        this.color = color;
-        this.text = text;
+        this.color = color != null ? color : Material.STONE;
+        this.text = text != null ? text : "";
         this.velocity = new Vector(0, 0, 0);
         this.uuid = UUID.randomUUID();
         this.isMotherBall = isMotherBall;
+        
+        // 初始化FRICTION和BALL_SIZE
+        String worldName = location.getWorld().getName();
+        try {
+            if (plugin.getInGame() != null && plugin.getInGame().ballsConfig != null) {
+                this.FRICTION = plugin.getInGame().ballsConfig.getDouble(worldName + ".friction", 0.6) / 100.0;
+                this.BALL_SIZE = plugin.getInGame().ballsConfig.getDouble(worldName + ".ball_size", 1.0);
+            } else {
+                this.FRICTION = 0.006; // 默认0.6%摩擦力
+            }
+        } catch (Exception e) {
+            plugin.getLogger().warning("读取球配置时出错: " + e.getMessage());
+            this.FRICTION = 0.006;
+        }
+        
         // 创建碰撞检测
         this.interactor = (Interaction) location.getWorld().spawnEntity(location.clone().add(new Vector(0.5, 0, 0.5)), EntityType.INTERACTION);
 
         // 创建方块展示实体
         this.blockDisplay = (BlockDisplay) location.getWorld().spawnEntity(location, EntityType.BLOCK_DISPLAY);
-        blockDisplay.setBlock(color.createBlockData());
-
-        // 这里修改球的外观大小，有问题就注释掉
-        Transformation transformation = blockDisplay.getTransformation();
-        transformation.getScale().set(BALL_SIZE, BALL_SIZE, BALL_SIZE);
-        blockDisplay.setTransformation(transformation);
-//        interactor.setPassenger(blockDisplay);
+        blockDisplay.setBlock(this.color.createBlockData());
 
         textDisplay = (ArmorStand) location.getWorld().spawnEntity(location, EntityType.ARMOR_STAND);
         textDisplay.setInvisible(true);
-        textDisplay.setCustomName(text);
+        textDisplay.setCustomName(this.text);
         textDisplay.setCustomNameVisible(true);
 
         displayBalls.add(this);
@@ -67,24 +90,48 @@ public class DisplayBall {
         interactor.remove();
         textDisplay.remove();
         displayBalls.remove(this);
-        plugin.getInGame().getBalls(getWorld()).remove(this);
-
-//        PlanetLib.getScheduler().runNextTick(t->{
-//            plugin.getLogger().info("Destroyed entity: success="+blockDisplay.isDead());
-//        });
+        
+        // 安全地从游戏中移除球
+        try {
+            if (plugin != null && plugin.getInGame() != null && location != null && location.getWorld() != null) {
+                plugin.getInGame().getBalls(getWorld()).remove(this);
+            }
+        } catch (Exception e) {
+            if (plugin != null) {
+                plugin.getLogger().warning("移除球时出错: " + e.getMessage());
+            }
+        }
     }
 
     public void updateMovement(int amount) {
-        ConfigurationSection section = plugin.getInGame().ballsConfig.getConfigurationSection(getWorld()+".holes");
+        if (plugin == null || location == null || location.getWorld() == null) {
+            return; // 如果基本数据无效，不执行更新
+        }
+        
+        String worldName = getWorld();
+        ConfigurationSection section = plugin.getInGame().ballsConfig.getConfigurationSection(worldName + ".holes");
+        if (section == null) {
+            return; // 如果找不到洞配置，不执行更新
+        }
+        
         //如果在掉落状态，处理掉落
         if(isFalling) {
             velocity.setY(velocity.getY()*1.01);
-            //velocity.setX(velocity.getX()*0.8);
-            //velocity.setZ(velocity.getZ()*0.8);
             velocity.setX(0).setZ(0);
-            if(plugin.getInGame().ballsConfig.getInt(getWorld() + ".holes.y") >= location.getY()){
+            if(plugin.getInGame().ballsConfig.getInt(worldName + ".holes.y") >= location.getY()){
+                // 检查游戏类型以决定使用哪种进球处理方法
+                String gameType = plugin.getInGame().getGameType(worldName);
+                plugin.getLogger().info("球进洞: 世界=" + worldName + ", 游戏类型=" + gameType + ", 球=" + text);
+
+                if ("8balls".equals(gameType)) {
+                    int ballNumber = plugin.getInGame().extractBallNumberFromDisplayBall(this);
+                    plugin.getLogger().info("8balls模式进球: 球号=" + ballNumber);
+                    plugin.getRoundManager().handle8ballsIn(worldName, ballNumber);
+                } else {
+                    plugin.getLogger().info("标准模式进球: 母球=" + isMotherBall);
+                    plugin.getRoundManager().handleBallIn(worldName, isMotherBall);
+                }
                 destroy();
-                plugin.getRoundManager().handleBallIn(getWorld(), isMotherBall);
             }
         }else{
             // 应用摩擦力
@@ -96,44 +143,59 @@ public class DisplayBall {
             // 检查速度是否低于阈值
             if (velocity.length() < MIN_SPEED && velocity.length() != 0.0) {
                 velocity = new Vector(0, 0, 0);
-//                plugin.getLogger().info("Velocity is now lower than MIN_SPEED.Stopped");
                 return;
             }
-//            else if(velocity.length() > MIN_SPEED){
-//                plugin.getLogger().info("Velocity(Higher than MIN_SPEED): "+velocity.clone().length()+"; Location at: "+location);
-//            }
+            /*
+            else{
+                isJudging = true;
+            }
+            */
 
-            int x1 = plugin.getInGame().ballsConfig.getInt(getWorld() + ".bounds.x1");
-            int z1 = plugin.getInGame().ballsConfig.getInt(getWorld() + ".bounds.z1");
-            int x2 = plugin.getInGame().ballsConfig.getInt(getWorld() + ".bounds.x2");
-            int z2 = plugin.getInGame().ballsConfig.getInt(getWorld() + ".bounds.z2");
+            int x1 = plugin.getInGame().ballsConfig.getInt(worldName + ".bounds.x1");
+            int z1 = plugin.getInGame().ballsConfig.getInt(worldName + ".bounds.z1");
+            int x2 = plugin.getInGame().ballsConfig.getInt(worldName + ".bounds.x2");
+            int z2 = plugin.getInGame().ballsConfig.getInt(worldName + ".bounds.z2");
 
             // 弹性系数
-            double restitution = plugin.getInGame().ballsConfig.getDouble(getWorld() + ".restitution");
+            double restitution;
+            try{
+                restitution = plugin.getInGame().ballsConfig.getDouble(worldName + ".restitution");
+            }catch (NullPointerException e){
+                restitution = 0.8;
+            }
 
             // 假设x2>x1, z2>z1
-            //碰壁检测，建议加0.25校准值防止卡在墙里
-            if (location.getX() < x1 - radius) {
+            // 碰壁检测
+            boolean hitWall = false;
+            if (location.getX()+0.25/*校准值0.25*/ < x1) {
                 velocity.setX(-velocity.getX()*restitution);
-                location.setX(x1);
+                location.setX(x1-0.25);
+                hitWall = true;
             }
-            if (location.getX() > x2 + radius) {
+            if (location.getX()-0.25/*校准值0.25*/ > x2) {
                 velocity.setX(-velocity.getX()*restitution);
-                location.setX(x2);
+                location.setX(x2+0.25);
+                hitWall = true;
             }
 
-            if (location.getZ() < z1 - radius) {
+            if (location.getZ()+0.25/*校准值0.25*/ < z1) {
                 velocity.setZ(-velocity.getZ()*restitution);
-                location.setZ(z1);
+                location.setZ(z1-0.25);
+                hitWall = true;
             }
-            if (location.getZ() > z2 + radius) {
+            if (location.getZ()-0.25/*校准值0.25*/ > z2) {
                 velocity.setZ(-velocity.getZ()*restitution);
-                location.setZ(z2);
+                location.setZ(z2+0.25);
+                hitWall = true;
+            }
+
+            // 如果碰壁了，通知游戏管理器
+            if (hitWall) {
+                plugin.getRoundManager().handleWallHit(worldName);
             }
         }
 
         location.add(velocity.clone().multiply(1.0/amount));
-//        location.setY(Math.round(location.getY())+0.01);
         this.blockDisplay.setVelocity(velocity.clone().multiply(20));
         blockDisplay.teleport(location);
 
@@ -141,13 +203,19 @@ public class DisplayBall {
 
         textDisplay.setVelocity(velocity.clone().multiply(20));
         textDisplay.teleport(location.clone().add(new Vector(0.5, -0.8, 0.5)));
-//        plugin.getLogger().info("Teleported: "+velocity.clone().length()+"; Location at: "+location);
 
         if(!isFalling) for(String key: section.getKeys(false)){
-            int hx1 = section.getInt(key+".x1");
-            int hx2 = section.getInt(key+".x2");
-            int hz1 = section.getInt(key+".z1");
-            int hz2 = section.getInt(key+".z2");
+            if (key.equals("y")) continue; // 跳过y键
+            
+            int hx1, hx2, hz1, hz2;
+            try {
+                hx1 = section.getInt(key+".x1");
+                hx2 = section.getInt(key+".x2");
+                hz1 = section.getInt(key+".z1");
+                hz2 = section.getInt(key+".z2");
+            } catch (Exception e) {
+                continue; // 如果获取洞坐标失败，跳过此洞
+            }
 
             if (hx1 > hx2) {
                 int temp = hx1;
@@ -160,16 +228,29 @@ public class DisplayBall {
                 hz2 = temp;
             }
 
-            // hx1 < hx2
-            // hz1 < hz2
-
-            if (hx1 < location.getX()-0.75 && hx2 > location.getX()-0.75 &&
-                    hz1 < location.getZ()-0.75 && hz2 > location.getZ()-0.75 &&
-                    hx1 < location.getX()+0.75 && hx2 > location.getX()+0.75 &&
-                    hz1 < location.getZ()+0.75 && hz2 > location.getZ()+0.75 ) {
+            if(
+                    location.getX()-0.5 > hx1
+                    &&
+                    location.getX()+0.5 < hx2
+                    &&
+                    location.getZ()-0.5 > hz1
+                    &&
+                    location.getZ()+0.5 < hz2
+            ){
                 isFalling = true;
                 velocity.setY(-0.07).setX(0).setZ(0);
             }
+
+            /*
+            if (hx1 < location.getX()-radius && hx2 > location.getX()-radius &&
+                    hz1 < location.getZ()-radius && hz2 > location.getZ()-radius &&
+                    hx1 < location.getX()+radius && hx2 > location.getX()+radius &&
+                    hz1 < location.getZ()+radius && hz2 > location.getZ()+radius ) {
+                isFalling = true;
+                velocity.setY(-0.07).setX(0).setZ(0);
+            }
+
+             */
         }
     }
 
@@ -178,15 +259,13 @@ public class DisplayBall {
     }
 
     public boolean isColliding(DisplayBall other) {
-        return other.location.distance(location)<Math.sqrt(2);
+        return other != null && other.location != null && location != null && 
+               other.location.distance(location) < Math.sqrt(2);
     }
 
     public String getWorld(){
-        return location.getWorld().getName();
-    }
-
-    public double getRadius() {
-        return this.radius;
+        return location != null && location.getWorld() != null ? 
+               location.getWorld().getName() : null;
     }
 
     public boolean getIsFalling() {
