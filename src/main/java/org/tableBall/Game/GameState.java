@@ -26,6 +26,10 @@ public class GameState {
     private boolean hasFirstBallHit; // 是否已经击中第一个球
     private boolean firstBallCorrect; // 第一个球是否正确
     private int pendingColorBall; // 待分配颜色的球号
+    private boolean black8InHole; // 黑8是否进洞
+    private static boolean isOtherBallInHole; // 黑8进洞时有没有除了白球以外的其他球进洞
+    private int breakPlayerIndex; // 开球玩家索引
+    private boolean motherBallHitAnyBall; // 母球是否击中了任何球
 
     public GameState(List<Player> players, String gameType, int totalRounds) {
         this.players = players;
@@ -48,6 +52,9 @@ public class GameState {
         this.hasFirstBallHit = false;
         this.firstBallCorrect = false;
         this.pendingColorBall = -1;
+        this.black8InHole = false;
+        this.breakPlayerIndex = 0; // 第一局由第一个玩家开球
+        this.motherBallHitAnyBall = false;
 
         // 初始化玩家数据
         for (Player player : players) {
@@ -78,6 +85,7 @@ public class GameState {
         this.whiteBallIn = false;
         this.isWaitingForBallsToStop = false;
         this.ballsInHole = 0;
+        this.black8InHole = false;
         this.tempScore = 0;
 
         this.wallHitCount = 0;
@@ -85,6 +93,7 @@ public class GameState {
         this.firstBallCorrect = false;
         this.pendingInfraction = null;
         this.pendingColorBall = -1;
+        this.motherBallHitAnyBall = false;
     }
 
     /**
@@ -191,6 +200,11 @@ public class GameState {
         }
         // 清除待处理的获胜者
         pendingRoundWinner = null;
+
+        // 切换开球玩家（轮换制）
+        breakPlayerIndex = (breakPlayerIndex + 1) % players.size();
+        // 设置当前玩家为开球玩家
+        currentPlayerIndex = breakPlayerIndex;
     }
 
     public Player getPendingRoundWinner() {
@@ -275,5 +289,41 @@ public class GameState {
      */
     public boolean isCurrentRoundFinished() {
         return currentRound > totalRounds;
+    }
+
+    public boolean isBlack8InHole() {
+        return black8InHole;
+    }
+
+    public void setBlack8InHole(boolean black8InHole) {
+        this.black8InHole = black8InHole;
+    }
+
+    public Player getBreakPlayer() {
+        return players.get(breakPlayerIndex);
+    }
+
+    public int getBreakPlayerIndex() {
+        return breakPlayerIndex;
+    }
+
+    public boolean hasMotherBallHitAnyBall() {
+        return motherBallHitAnyBall;
+    }
+
+    public void setMotherBallHitAnyBall(boolean motherBallHitAnyBall) {
+        this.motherBallHitAnyBall = motherBallHitAnyBall;
+    }
+
+    public static void setIsOtherBallInHole(boolean isOtherBallInHole){
+        GameState.isOtherBallInHole = isOtherBallInHole;
+    }
+
+    public static boolean getIsOtherBallInHole(){
+        return isOtherBallInHole;
+    }
+
+    public static boolean getIsInGame(Player p){
+        return p.getScoreboardTags().contains("tableball_ingame");
     }
 }

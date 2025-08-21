@@ -2,6 +2,7 @@ package org.tableBall.Commands;
 
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
+import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -13,6 +14,7 @@ import org.tableBall.Entity.DisplayBall;
 import org.tableBall.Game.GameState;
 import org.tableBall.Game.Start;
 import org.tableBall.Manager.RoundManager;
+import org.tableBall.Manager.ScoreBoardManager;
 import org.tableBall.TableBall;
 import org.tableBall.Utils.InventoryUtils;
 
@@ -28,18 +30,25 @@ public class LeaveCommand implements CommandExecutor {
     }
 
     public static void endGameForRealLikeDeepseekSTFU(World currentWorld){
+//        plugin.getLogger().info("[DEBUG] endGameForRealLikeDeepseekSTFU开始执行，世界: " + currentWorld.getName());
+        
         String lobbyWorld = plugin.getConfig().getString("lobby-world", "world");
         String worldName = currentWorld.getName();
 
+//        plugin.getLogger().info("[DEBUG] 开始清除世界中的实体");
         // 清除所有实体（除了玩家）
         currentWorld.getEntities().forEach(entity -> {
             if (!(entity instanceof Player)) {
                 entity.remove();
             }
         });
+//        plugin.getLogger().info("[DEBUG] 实体清除完成");
 
         // 获取当前世界的所有玩家并清理数据
+//        plugin.getLogger().info("[DEBUG] 开始处理世界中的玩家，玩家数量: " + currentWorld.getPlayers().size());
         for (Player worldPlayer : currentWorld.getPlayers()) {
+//            plugin.getLogger().info("[DEBUG] 处理玩家: " + worldPlayer.getName());
+            
             // 清除标签
             worldPlayer.removeScoreboardTag("tableball_ingame");
             
@@ -61,6 +70,7 @@ public class LeaveCommand implements CommandExecutor {
                 plugin.getScoreBoardManager().clearPlayerData(worldPlayer);
                 // 传送到主城
                 worldPlayer.teleport(Bukkit.getWorld(lobbyWorld).getSpawnLocation());
+                worldPlayer.playSound(/*worldPlayer.getLocation()*/Bukkit.getWorld(lobbyWorld).getSpawnLocation(), Sound.ENTITY_WITHER_DEATH, 1.0f, 1.0f);
                 // 设置主城物品栏
                 new InventoryUtils(plugin).setLobbyInventory(worldPlayer);
             } else {
@@ -69,12 +79,15 @@ public class LeaveCommand implements CommandExecutor {
         }
 
         // 清除游戏数据和任务
+//        plugin.getLogger().info("[DEBUG] 清除游戏数据开始");
         plugin.getInGame().clearBalls(worldName);
         plugin.getRoundManager().endGame(worldName);
+        plugin.getScoreBoardManager().TitlePointerCycleTask.cancel();
         
         // 清理全局数据
         Start.currentGame = null;
         RoundManager.scores.clear();
+//        plugin.getLogger().info("[DEBUG] 游戏数据清除完成，endGameForRealLikeDeepseekSTFU执行完毕");
     }
 
     @Override
@@ -156,6 +169,7 @@ public class LeaveCommand implements CommandExecutor {
             String lobbyWorld = plugin.getConfig().getString("lobby-world", "world");
             if (Bukkit.getWorld(lobbyWorld) != null) {
                 player.teleport(Bukkit.getWorld(lobbyWorld).getSpawnLocation());
+                player.setGameMode(GameMode.SURVIVAL);
             }
             return true;
         }

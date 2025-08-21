@@ -105,7 +105,7 @@ public class PlayerDataManager {
                     pstmt.executeUpdate();
                 }
                 
-                plugin.getLogger().info("记录玩家 " + player.getName() + " 在模式 " + gameMode + " 的结果: " + result);
+                // 记录玩家游戏结果
             }
             
         } catch (SQLException e) {
@@ -182,7 +182,7 @@ public class PlayerDataManager {
         try {
             if (connection != null && !connection.isClosed()) {
                 connection.close();
-                plugin.getLogger().info("玩家数据库连接已关闭");
+                // 玩家数据库连接已关闭
             }
         } catch (SQLException e) {
             plugin.getLogger().severe("关闭数据库连接失败: " + e.getMessage());

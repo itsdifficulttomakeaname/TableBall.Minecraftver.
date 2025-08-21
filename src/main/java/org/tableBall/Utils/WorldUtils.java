@@ -106,6 +106,32 @@ public class WorldUtils {
     }
 
     /**
+     * 获取balls.yml中配置的世界名称
+     * @return 世界名称数组
+     */
+    public String[] getBallsConfigWorlds() {
+        try {
+            // 加载balls.yml配置文件
+            org.bukkit.configuration.file.YamlConfiguration ballsConfig = 
+                org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(
+                    new java.io.File(plugin.getDataFolder(), "balls.yml"));
+            
+            // 获取所有顶级键（世界名称）
+            java.util.Set<String> worldKeys = ballsConfig.getKeys(false);
+            
+            // 过滤掉默认世界（world, world_nether, world_the_end）
+            return worldKeys.stream()
+                    .filter(name -> !name.equals("world") && 
+                                   !name.equals("world_nether") && 
+                                   !name.equals("world_the_end"))
+                    .toArray(String[]::new);
+        } catch (Exception e) {
+            plugin.getLogger().warning("无法读取balls.yml配置文件: " + e.getMessage());
+            return new String[0];
+        }
+    }
+
+    /**
      * 将玩家传送到大厅
      * @param player 要传送的玩家
      * @return 是否成功传送

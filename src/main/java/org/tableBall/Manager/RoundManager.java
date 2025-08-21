@@ -8,6 +8,7 @@ import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.tableBall.Entity.DisplayBall;
 import org.tableBall.Game.GameState;
+import org.tableBall.Game.InGame;
 import org.tableBall.Listeners.EntityEventListener;
 import org.tableBall.TableBall;
 
@@ -127,12 +128,12 @@ public class RoundManager {
             return;
         }
 
-        plugin.getLogger().info("8balls进球: 世界=" + worldName + ", 球号=" + ballNumber);
+        // 8balls进球处理
 
         if (ballNumber == 0) {
             // 母球进洞
             gameState.setWhiteBallIn(true);
-            plugin.getLogger().info("8balls: 母球进洞");
+            // 8balls: 母球进洞
             return;
         }
 
@@ -143,16 +144,10 @@ public class RoundManager {
 
         // 特殊处理黑8进洞
         if (ballNumber == 8) {
-            // 立即判断胜负（在球被销毁之前）
-            Player winner = determine8ballsWinner(worldName, gameState, currentPlayer);
-            if (winner != null) {
-                // 将获胜者信息存储到gameState中，稍后在settleTurn中处理
-                gameState.setPendingRoundWinner(winner);
-                gameState.setHasScored(true);
-                gameState.incrementBallsInHole();
-                return;
-            }
-
+            gameState.setBlack8InHole(true);
+            
+            // 不立即判断胜负，等到所有球停下来后在settleTurn中统一处理
+            // 这样可以正确检测黑8与其他球同时进洞的犯规情况
             gameState.setHasScored(true);
             gameState.incrementBallsInHole();
             return;
@@ -186,39 +181,60 @@ public class RoundManager {
     }
 
     /**
-     * 更新玩家的颜色指示器（第九格陶瓦）
+     * 更新玩家的颜色指示器（第九格染料）
      */
     private void updatePlayerColorIndicator(Player player, String color) {
         Material material;
+        String displayName;
         switch (color) {
             case "red":
-                material = org.bukkit.Material.RED_TERRACOTTA;
+                material = org.bukkit.Material.RED_DYE;
+                displayName = "§c红色球";
                 break;
             case "blue":
-                material = org.bukkit.Material.BLUE_TERRACOTTA;
+                material = org.bukkit.Material.BLUE_DYE;
+                displayName = "§9蓝色球";
                 break;
             default:
-                material = org.bukkit.Material.GRAY_TERRACOTTA;
+                material = org.bukkit.Material.GRAY_DYE;
+                displayName = "§7未分配";
                 break;
         }
-        player.getInventory().setItem(8, new org.bukkit.inventory.ItemStack(material, 1));
+
+        org.bukkit.inventory.ItemStack item = new org.bukkit.inventory.ItemStack(material, 1);
+        org.bukkit.inventory.meta.ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName(displayName);
+            item.setItemMeta(meta);
+        }
+        player.getInventory().setItem(8, item);
     }
 
     /**
-     * 判断8balls模式黑8进洞时的获胜者
+     * 在结算阶段判断8balls模式黑8进洞时的获胜者
+     * 这个方法在所有球停下来并且所有进球事件都处理完毕后调用
      * @param worldName 世界名称
      * @param gameState 游戏状态
      * @param currentPlayer 当前玩家
      * @return 获胜者，如果没有则返回null
      */
-    private Player determine8ballsWinner(String worldName, GameState gameState, Player currentPlayer) {
+    private Player determine8ballsWinnerAfterSettle(String worldName, GameState gameState, Player currentPlayer) {
         if (currentPlayer == null) return null;
+
+        // 检查是否是黑8与其他球同时进洞的犯规情况
+        if (gameState.getBallsInHole() > 1) {
+            // 黑8与其他球同时进洞，这是犯规，对方获胜
+            for (Player p : gameState.getPlayers()) {
+                if (!p.equals(currentPlayer)) {
+                    return p;
+                }
+            }
+        }
 
         String playerColor = gameState.getPlayerColor(currentPlayer);
 
         // 如果玩家还没有分配颜色，说明是开球阶段打进了黑8，这是犯规
         if ("none".equals(playerColor)) {
-            plugin.getLogger().info("8balls: 开球阶段打进黑8，犯规");
             // 对方获胜
             for (Player p : gameState.getPlayers()) {
                 if (!p.equals(currentPlayer)) {
@@ -235,8 +251,56 @@ public class RoundManager {
             hasFinishedColorBalls = !hasColorBallsOnTable(worldName, 9, 15);
         }
 
-        plugin.getLogger().info("8balls: 玩家=" + currentPlayer.getName() + ", 颜色=" + playerColor +
-                               ", 色球已打完=" + hasFinishedColorBalls + ", 母球进洞=" + gameState.isWhiteBallIn());
+        // 8balls: 检查获胜条件
+
+        if (hasFinishedColorBalls && !gameState.isWhiteBallIn() && !GameState.getIsOtherBallInHole()) {
+            // 正常获胜：打完色球后打进黑8且母球未进洞
+            return currentPlayer;
+        } else {
+            // 犯规：色球未打完就打进黑8，或者打进黑8时母球也进洞
+            // 对方获胜
+            for (Player p : gameState.getPlayers()) {
+                if (!p.equals(currentPlayer)) {
+                    return p;
+                }
+            }
+        }
+
+        return null;
+    }
+    
+    /**
+     * 判断8balls模式黑8进洞时的获胜者（旧方法，保留作为备用）
+     * @param worldName 世界名称
+     * @param gameState 游戏状态
+     * @param currentPlayer 当前玩家
+     * @return 获胜者，如果没有则返回null
+     */
+    private Player determine8ballsWinner(String worldName, GameState gameState, Player currentPlayer) {
+        if (currentPlayer == null) return null;
+
+        String playerColor = gameState.getPlayerColor(currentPlayer);
+
+        // 如果玩家还没有分配颜色，说明是开球阶段打进了黑8，这是犯规
+        if ("none".equals(playerColor)) {
+            // 8balls: 开球阶段打进黑8，犯规
+            // 对方获胜
+            for (Player p : gameState.getPlayers()) {
+                if (!p.equals(currentPlayer)) {
+                    return p;
+                }
+            }
+        }
+
+        // 检查玩家是否已经打完了自己的色球
+        boolean hasFinishedColorBalls = false;
+        if ("red".equals(playerColor)) {
+            hasFinishedColorBalls = !hasColorBallsOnTable(worldName, 1, 7);
+        } else if ("blue".equals(playerColor)) {
+            hasFinishedColorBalls = !hasColorBallsOnTable(worldName, 9, 15);
+        }
+
+        // 8balls: 检查获胜条件
 
         if (hasFinishedColorBalls && !gameState.isWhiteBallIn()) {
             // 正常获胜：打完色球后打进黑8且母球未进洞
@@ -328,18 +392,30 @@ public class RoundManager {
         boolean whiteBallIn = gameState.isWhiteBallIn();
         boolean hasScored = gameState.hasScored();
 
-        plugin.getLogger().info("8balls结算: 玩家=" + (currentPlayer != null ? currentPlayer.getName() : "null") +
-                               ", 母球进洞=" + whiteBallIn + ", 有进球=" + hasScored);
+        // 8balls结算回合
 
         // 处理待分配的颜色
         if (!gameState.areColorsAssigned() && gameState.getPendingColorBall() != -1) {
             assignPlayerColors(worldName, gameState);
         }
 
-        // 检查是否有待处理的获胜者（黑8进洞的情况）
+        // 检查黑8进洞的情况
+        if (gameState.isBlack8InHole()) {
+            // 黑8进洞，需要特殊处理
+            Player winner = determine8ballsWinnerAfterSettle(worldName, gameState, currentPlayer);
+            if (winner != null) {
+                end8ballsRound(worldName, gameState, winner);
+                return;
+            }
+        }
+
+        // 将IsOtherBallInHole归位
+        GameState.setIsOtherBallInHole(false);
+        
+        // 检查是否有待处理的获胜者（其他情况）
         Player roundWinner = gameState.getPendingRoundWinner();
         if (roundWinner != null) {
-            plugin.getLogger().info("8balls: 检测到待处理获胜者=" + roundWinner.getName());
+            // 8balls: 检测到待处理获胜者
             end8ballsRound(worldName, gameState, roundWinner);
             return;
         }
@@ -400,13 +476,23 @@ public class RoundManager {
      * @param reason 犯规原因
      */
     public void handleInfraction(String worldName, String reason) {
-        // 1. 清除场上的母球
+        GameState gameState = gameStates.get(worldName);
+        if (gameState == null) return;
+
+        Player currentPlayer = gameState.getCurrentPlayer();
+
+        // 1. 在公屏输出犯规信息
+        for (Player p : Bukkit.getWorld(worldName).getPlayers()) {
+            p.sendMessage("§c[" + (currentPlayer != null ? currentPlayer.getName() : "玩家") + "] 犯规！理由是：" + reason);
+        }
+
+        // 2. 清除场上的母球
         plugin.getInGame().removeMotherBall(worldName);
 
-        // 2. 切换回合
+        // 3. 切换回合
         endTurn(worldName);
 
-        // 3. 给新的当前玩家（对方）母球
+        // 4. 给新的当前玩家（对方）母球
         Player newCurrentPlayer = getCurrentPlayer(worldName);
         if (newCurrentPlayer != null) {
             ItemStack item = new ItemStack(Material.BIRCH_BOAT, 1);
@@ -414,10 +500,10 @@ public class RoundManager {
             newCurrentPlayer.getInventory().addItem(item);
         }
 
-        // 4. 在计分板显示犯规信息
+        // 5. 在计分板显示犯规信息
         plugin.getScoreBoardManager().setInfraction(worldName, reason);
 
-        // 5. 延迟清除犯规状态
+        // 6. 延迟清除犯规状态
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             plugin.getScoreBoardManager().clearInfraction(worldName);
         }, 60L); // 3秒后清除
@@ -445,41 +531,41 @@ public class RoundManager {
 
         if (ballNumber >= 1 && ballNumber <= 7) {
             gameState.setPlayerColor(currentPlayer, "red");
+            Player otherPlayer = null;
             // 给对方分配蓝色
             for (Player p : gameState.getPlayers()) {
                 if (!p.equals(currentPlayer)) {
                     gameState.setPlayerColor(p, "blue");
+                    otherPlayer = p;
                     break;
                 }
             }
             updatePlayerColorIndicator(currentPlayer, "red");
-            for (Player p : gameState.getPlayers()) {
-                if (!p.equals(currentPlayer)) {
-                    updatePlayerColorIndicator(p, "blue");
-                    break;
-                }
+            if (otherPlayer != null) {
+                updatePlayerColorIndicator(otherPlayer, "blue");
             }
             for(Player p : Bukkit.getWorld(worldName).getPlayers()) {
-                p.sendMessage("§a颜色分配：" + currentPlayer.getName() + " = 红色，对方 = 蓝色");
+                p.sendMessage("§a颜色分配：" + currentPlayer.getName() + " = §c红色§a，" +
+                             (otherPlayer != null ? otherPlayer.getName() : "对方") + " = §9蓝色");
             }
         } else if (ballNumber >= 9 && ballNumber <= 15) {
             gameState.setPlayerColor(currentPlayer, "blue");
+            Player otherPlayer = null;
             // 给对方分配红色
             for (Player p : gameState.getPlayers()) {
                 if (!p.equals(currentPlayer)) {
                     gameState.setPlayerColor(p, "red");
+                    otherPlayer = p;
                     break;
                 }
             }
             updatePlayerColorIndicator(currentPlayer, "blue");
-            for (Player p : gameState.getPlayers()) {
-                if (!p.equals(currentPlayer)) {
-                    updatePlayerColorIndicator(p, "red");
-                    break;
-                }
+            if (otherPlayer != null) {
+                updatePlayerColorIndicator(otherPlayer, "red");
             }
             for(Player p : Bukkit.getWorld(worldName).getPlayers()) {
-                p.sendMessage("§a颜色分配：" + currentPlayer.getName() + " = 蓝色，对方 = 红色");
+                p.sendMessage("§a颜色分配：" + currentPlayer.getName() + " = §9蓝色§a，" +
+                             (otherPlayer != null ? otherPlayer.getName() : "对方") + " = §c红色");
             }
         }
 
@@ -494,7 +580,12 @@ public class RoundManager {
      * @return 犯规原因，如果没有犯规则返回null
      */
     private String check8ballsInfractions(String worldName, GameState gameState) {
-        // 1. 检查基本击球要求
+        // 1. 检查母球是否击中了任何球
+        if (!gameState.hasMotherBallHitAnyBall()) {
+            return "母球未击中任何球";
+        }
+
+        // 2. 检查基本击球要求
         if (gameState.isBreakShot()) {
             // 开球：至少要有四个球碰壁或者至少有一颗球进球
             if (gameState.getWallHitCount() < 4 && !gameState.hasScored()) {
@@ -507,44 +598,7 @@ public class RoundManager {
             }
         }
 
-        // 2. 检查黑8进洞时的多球进洞犯规
-        if (gameState.hasScored() && gameState.getBallsInHole() > 1) {
-            // 检查是否有黑8进洞
-            boolean black8InHole = false;
-            for (DisplayBall ball : DisplayBall.displayBalls) {
-                if (ball.getWorld().equals(worldName)) {
-                    int ballNumber = plugin.getInGame().extractBallNumberFromDisplayBall(ball);
-                    if (ballNumber == 8) {
-                        // 黑8还在场上，说明没有进洞
-                        break;
-                    }
-                }
-            }
-
-            // 如果代码执行到这里且有多球进洞，说明黑8可能进洞了
-            // 需要检查是否同时进了其他球
-            if (gameState.getBallsInHole() > 1) {
-                // 这里需要更精确的检测，暂时简化处理
-                Player currentPlayer = getCurrentPlayer(worldName);
-                String playerColor = gameState.getPlayerColor(currentPlayer);
-
-                if (!"none".equals(playerColor)) {
-                    // 如果玩家已经有颜色，检查是否打完了自己的色球
-                    boolean hasFinishedColorBalls = false;
-                    if ("red".equals(playerColor)) {
-                        hasFinishedColorBalls = !hasColorBallsOnTable(worldName, 1, 7);
-                    } else if ("blue".equals(playerColor)) {
-                        hasFinishedColorBalls = !hasColorBallsOnTable(worldName, 9, 15);
-                    }
-
-                    if (!hasFinishedColorBalls) {
-                        return "黑8犯规：色球未打完时黑8与其他球同时进洞";
-                    } else {
-                        return "黑8犯规：黑8与其他球同时进洞";
-                    }
-                }
-            }
-        }
+        // 3. 黑8进洞时的犯规检查已经在determine8ballsWinnerAfterSettle方法中处理
 
         return null; // 无犯规
     }
@@ -556,8 +610,14 @@ public class RoundManager {
         gameState.addRoundWin(winner);
 
         for(Player p : Bukkit.getWorld(worldName).getPlayers()) {
-            p.sendMessage("§a第" + gameState.getCurrentRound() + "局结束！");
+            p.sendMessage("§a第 " + gameState.getCurrentRound() + " 局结束！");
             p.sendMessage("§6获胜者：" + winner.getName());
+
+            // 同时以标题形式呈现
+            p.sendTitle("§a第 "+gameState.getCurrentRound()+" 局结束",
+                    "§6获胜者: "+winner.getName(),
+                    20,60,20
+            );
 
             // 显示当前比分
             for (Player player : gameState.getPlayers()) {
@@ -579,9 +639,19 @@ public class RoundManager {
             // 开始下一局
             gameState.nextRound();
 
+            // 重置所有玩家的染料为灰色（未分配状态）
+            for (Player player : gameState.getPlayers()) {
+                updatePlayerColorIndicator(player, "none");
+            }
+
             // 清除场上所有球并重新生成
             plugin.getInGame().clearBalls(worldName);
             plugin.getInGame().spawnBalls(worldName);
+
+            // 如果是8balls模式，设置球的发光效果
+            if (gameState.getGameType().equals("8balls")) {
+                plugin.getInGame().setGlowingFor8ballsMode(worldName);
+            }
 
             // 将玩家传送到母球旁边
             teleportPlayersToMotherBall(worldName);
@@ -591,6 +661,9 @@ public class RoundManager {
 
             for(Player p : Bukkit.getWorld(worldName).getPlayers()) {
                 p.sendMessage("§a第" + gameState.getCurrentRound() + "局开始！");
+                Player breakPlayer = gameState.getBreakPlayer();
+                p.sendMessage("§e由 " + breakPlayer.getName() + " 开球");
+                p.playSound(p.getLocation(), Sound.BLOCK_BEACON_ACTIVATE/*信标激活*/, 1.0f, 1.0f);
             }
         }
     }

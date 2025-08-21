@@ -7,7 +7,10 @@ import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.player.*;
+import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.scheduler.BukkitRunnable;
@@ -26,6 +29,7 @@ import org.tableBall.Utils.InventoryUtils;
 import java.util.*;
 
 import static java.lang.Math.max;
+import static org.tableBall.TableBall.instance;
 
 public class EntityEventListener implements Listener {
     private static TableBall plugin;
@@ -45,17 +49,6 @@ public class EntityEventListener implements Listener {
         this.start = new Start(plugin, plugin.getWorldUtils(), inGame);
         this.movementCheckTasks = new HashMap<>();
         this.ballInCheckTasks = new HashMap<>();
-//        startCollisionTask();
-
-        /*
-        PlanetLib.getScheduler().runTimer(t->{
-            for(Vehicle v: velocities.keySet()){
-                if(velocities.containsKey(v)) {
-                    v.setVelocity(velocities.get(v));
-                }else velocities.put(v, new Vector(0, 0, 0));
-            }
-        }, 2, 2);
-        */
     }
 
     private void startCollisionTask() {
@@ -153,6 +146,9 @@ public class EntityEventListener implements Listener {
             return; // 两个都不是母球，不需要检查犯规
         }
 
+        // 标记母球已经击中了其他球
+        gameState.setMotherBallHitAnyBall(true);
+
         // 只检查第一个击中的球
         if (gameState.hasFirstBallHit()) {
             return; // 已经检查过第一个球了
@@ -217,128 +213,6 @@ public class EntityEventListener implements Listener {
         return false;
     }
 
-/*
-    private static void handleBallCollision(DisplayBall ball1, DisplayBall ball2) {
-        if(ball1.isFalling||ball2.isFalling) return;
-
-        Vector v1 = ball1.velocity.clone();
-        Vector v2 = ball2.velocity.clone();
-        double angle = v1.angle(v2);
-
-        Vector collideV = ball1.location.toVector().subtract(ball2.location.toVector()).normalize();
-        double angleV1ToCollide = collideV.angle(v1), angleV2ToCollide = collideV.angle(v2);
-        if (Double.isNaN(angleV1ToCollide)) angleV1ToCollide=0.0;
-        if (Double.isNaN(angleV2ToCollide)) angleV2ToCollide=0.0;
-        Vector v1cos = collideV.clone().multiply(v1.length() * Math.cos(angleV1ToCollide));
-        Vector v2cos = collideV.clone().multiply(v2.length() * Math.cos(angleV2ToCollide));
-        // 如果这里出bug，碰撞超出预期方向，交换90和-90
-        Vector v1sin = collideV.clone().rotateAroundY(90).multiply(v1.length() * Math.sin(angleV1ToCollide));
-        Vector v2sin = collideV.clone().rotateAroundY(-90).multiply(v2.length() * Math.sin(angleV1ToCollide));
-
-        Vector v1new = v1sin.add(v2cos);
-        Vector v2new = v2sin.add(v1cos);
-
-        ball1.velocity = v1new;
-        ball2.velocity = v2new;
-
-
-        
-
-//        Vector deltaX = x2.clone().subtract(x1);
-//        double distance = deltaX.length();
-//        double minDistance = ball1.getRadius() + ball2.getRadius();
-//
-//        // 当两球距离>两球判定距离，不碰撞
-//        if (distance > minDistance) return;
-//
-//        Vector normal = deltaX.clone().normalize();
-//        double velocityAlongNormal = v1.clone().subtract(v2).dot(normal);
-//        Vector impulse = normal.clone().multiply(velocityAlongNormal);
-//
-//        ball1.velocity.subtract(impulse);
-//        ball2.velocity.add(impulse);
-//
-//        double overlap = minDistance - distance;
-//        Vector correction = normal.clone().multiply(overlap * 0.5);
-//        ball1.location.subtract(correction);
-//        ball2.location.add(correction);
-
-
-    }
-
- */
-
-    /*
-    private void handleBallCollision(DisplayBall ball1, DisplayBall ball2) {
-        Vector v1 = ball1.velocity;
-        Vector v2 = ball2.velocity;
-        Vector x1 = ball1.location.toVector(), x2 = ball2.location.toVector();
-
-        double dv = x1.clone().distance(x2)*x1.clone().distance(x2);
-        double n1 = Math.abs(v2.clone().subtract(v1).dot(x2.clone().subtract(x1))), n2 = Math.abs(v1.clone().subtract(v2).dot(x1.clone().subtract(x2)));
-
-//        plugin.getLogger().info(x2.clone().subtract(x1).multiply(n1/dv)+"; "+x1.clone().subtract(x2).multiply(n2/dv));
-
-        ball1.velocity.add(x2.clone().subtract(x1).multiply(n1/dv));
-        ball2.velocity.add(x1.clone().subtract(x2).multiply(n2/dv));
-
-//        Vector v1 = ball1.velocity;
-//        Vector v2 = ball2.velocity;
-//        Vector l1 = ball1.location.toVector(), l2 = ball2.location.toVector();
-//        double theta1 = v1.angle(l2.subtract(l1)), theta2 = v2.angle(l1.subtract(l2));
-//        if(Double.isNaN(theta1)) theta1=0;
-//        if(Double.isNaN(theta2)) theta2=0;
-//        Vector v1x = v1.clone().multiply(Math.cos(theta1)), v1y = v1.clone().multiply(Math.sin(theta1));
-//        Vector v2x = v2.clone().multiply(Math.cos(theta2)), v2y = v2.clone().multiply(Math.sin(theta2));
-//        Vector v1f = v1y.clone().add(v2x), v2f = v2y.clone().add(v1x);
-//
-//        plugin.getLogger().info(v1.length()+"; "+v2.length()+"; "+theta1+"; "+theta2+"; "+v1f.length()+"; "+v2f.length());
-
-//            pusherV.setVelocity(v1f);
-//            pushedV.setVelocity(v2f);
-//        ball1.velocity = v1f;
-//        ball2.velocity = v2f;
-    }
-
-     */
-
-    /*
-    @EventHandler
-    public void onBoatPushed(VehicleEntityCollisionEvent e) {
-        Entity pusher = e.getEntity();
-        Entity bePushedEntity = e.getVehicle();
-
-        if (pusher instanceof Player && bePushedEntity instanceof Boat) {
-            e.setCancelled(true);
-            return;
-        }
-
-        if (pusher instanceof Boat pusherV && bePushedEntity instanceof Boat pushedV) {
-            Vector v1 = pusherV.getVelocity();
-            Vector v2 = pushedV.getVelocity();
-            Vector l1 = pusher.getLocation().toVector(), l2 = bePushedEntity.getLocation().toVector();
-            double theta1 = v1.angle(l2.subtract(l1)), theta2 = v2.angle(l1.subtract(l2));
-            if(Double.isNaN(theta1)) theta1=0;
-            if(Double.isNaN(theta2)) theta2=0;
-            Vector v1x = v1.multiply(Math.cos(theta1)), v1y = v1.multiply(Math.sin(theta1));
-            Vector v2x = v2.multiply(Math.cos(theta2)), v2y = v2.multiply(Math.sin(theta2));
-            Vector v1f = v1y.add(v2x), v2f = v2y.add(v1x);
-
-            plugin.getLogger().info(v1.length()+"; "+v2.length()+"; "+theta1+"; "+theta2+"; "+v1f.length()+"; "+v2f.length());
-
-//            pusherV.setVelocity(v1f);
-//            pushedV.setVelocity(v2f);
-            velocities.put(pusherV, v1f);
-            velocities.put(pushedV, v2f);
-            pusherV.setVelocity(velocities.get(pusherV));
-            pushedV.setVelocity(velocities.get(pushedV));
-
-            e.setCancelled(true);
-            return;
-        }
-    }
-     */
-
     @SuppressWarnings("deprecation")
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
@@ -358,17 +232,145 @@ public class EntityEventListener implements Listener {
     public void onPlayerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
         String worldName = player.getWorld().getName();
-        if (inGame.isPlayerInGame(player)) {
-            inGame.removePlayer(player);
-        }
+        
+//        plugin.getLogger().info("[DEBUG] 玩家退出事件: " + player.getName() + " 从世界 " + worldName);
+//        plugin.getLogger().info("[DEBUG] 玩家是否有对局标签: " + player.getScoreboardTags().contains("tableball_ingame"));
+//        plugin.getLogger().info("[DEBUG] inGame.isPlayerInGame结果: " + inGame.isPlayerInGame(player));
+        
+        // 检查玩家是否在游戏中（使用更直接的方式：检查scoreboard标签）
+        if (player.getScoreboardTags().contains("tableball_ingame")) {
+//            plugin.getLogger().info("[DEBUG] 玩家有对局标签，调用handlePlayerQuitDuringGame");
+            handlePlayerQuitDuringGame(player, worldName);
+        } else if (inGame.isPlayerInGame(player)) {
+//            plugin.getLogger().info("[DEBUG] 玩家在InGame中，调用handlePlayerQuitDuringGame");
+            handlePlayerQuitDuringGame(player, worldName);
+        } /*else {
+            plugin.getLogger().info("[DEBUG] 玩家不在游戏中，跳过处理");
+        }*/
 
         event.setQuitMessage("§a [台球厅]  §r玩家 §6" + player.getName() + "§r 离开了台球厅！");
     }
+    
+    /**
+     * 处理游戏中玩家退出的情况
+     * @param player 退出的玩家
+     * @param worldName 世界名称
+     */
+    private void handlePlayerQuitDuringGame(Player player, String worldName) {
+//        plugin.getLogger().info("[DEBUG] 玩家退出处理开始: " + player.getName() + " 在世界: " + worldName);
+        
+        // 检查玩家是否有对局标签
+        if (player.getScoreboardTags().contains("tableball_ingame")) {
+//            plugin.getLogger().info("[DEBUG] 玩家 " + player.getName() + " 有对局标签，开始弃权处理");
+            
+            // 获取世界对象
+            World world = Bukkit.getWorld(worldName);
+            if (world == null) {
+//                plugin.getLogger().severe("[DEBUG] 无法获取世界对象: " + worldName);
+                return;
+            }
+            
+            // 直接从世界获取所有有对局标签的玩家（包括正在退出的玩家）
+            List<Player> playersInWorld = new ArrayList<>();
+            for (Player worldPlayer : world.getPlayers()) {
+                if (worldPlayer.getScoreboardTags().contains("tableball_ingame")) {
+                    playersInWorld.add(worldPlayer);
+//                    plugin.getLogger().info("[DEBUG] 从世界中找到对局玩家: " + worldPlayer.getName());
+                }
+            }
+            
+            // 如果当前玩家不在列表中，添加他（因为PlayerQuitEvent可能在他从世界中移除之前触发）
+            if (!playersInWorld.contains(player)) {
+                playersInWorld.add(player);
+//                plugin.getLogger().info("[DEBUG] 将退出的玩家添加到列表中: " + player.getName());
+            }
+            
+//            plugin.getLogger().info("[DEBUG] 总共找到 " + playersInWorld.size() + " 个对局玩家");
 
-    @EventHandler
-    public void onBlockBreak(BlockBreakEvent event) {
-        // 取消所有方块破坏事件
-        if (!EditModeCommand.isEditMode()) event.setCancelled(true);
+            // 找到对手（除了退出的玩家之外的其他玩家）
+            Player opponent = null;
+            for (Player p : playersInWorld) {
+                if (!p.equals(player)) {
+                    opponent = p;
+//                    plugin.getLogger().info("[DEBUG] 找到对手: " + opponent.getName());
+                    break;
+                }
+            }
+            
+            if (opponent == null) {
+                plugin.getLogger().warning("[DEBUG] 未找到对手，可能是单人游戏或数据异常");
+            }
+
+            // 显示结算信息（弃权方式）
+            String gameType = plugin.getInGame().getGameType(worldName);
+            if (gameType == null) {
+                gameType = "Standard"; // 默认模式
+            }
+//            plugin.getLogger().info("[DEBUG] 游戏类型: " + gameType);
+
+            // 记录弃权结果到数据库
+            if (opponent != null) {
+                // 弃权者记录弃权失败，对方记录获胜
+                plugin.getPlayerDataManager().recordGameResult(player, gameType, "forfeit");
+                plugin.getPlayerDataManager().recordGameResult(opponent, gameType, "win");
+//                plugin.getLogger().info("[DEBUG] 记录弃权结果: " + player.getName() + " 弃权, " + opponent.getName() + " 获胜");
+            } else {
+                // 没有对手的情况下，只记录弃权者的失败
+                plugin.getPlayerDataManager().recordGameResult(player, gameType, "forfeit");
+//                plugin.getLogger().info("[DEBUG] 只记录弃权者失败: " + player.getName());
+            }
+
+            // 在玩家退出后，向世界中剩余的玩家显示结算信息
+            if (world != null) {
+//                plugin.getLogger().info("[DEBUG] 开始向世界 " + worldName + " 中的玩家显示结算信息");
+//                plugin.getLogger().info("[DEBUG] 世界中当前玩家数量: " + world.getPlayers().size());
+                
+                for (Player worldPlayer : world.getPlayers()) {
+//                    plugin.getLogger().info("[DEBUG] 向玩家 " + worldPlayer.getName() + " 发送结算信息");
+                    worldPlayer.sendMessage("§e结算信息:");
+
+                    if ("8balls".equals(gameType)) {
+                        // 8balls模式显示局数
+                        org.tableBall.Game.GameState gameState = plugin.getRoundManager().getGameState(worldName);
+                        if (gameState != null) {
+                            for (Player p : playersInWorld) {
+                                int wins = gameState.getRoundWins(p);
+                                worldPlayer.sendMessage("§b" + p.getName() + ": §a" + wins + "胜");
+//                                plugin.getLogger().info("[DEBUG] 显示玩家 " + p.getName() + " 的胜利次数: " + wins);
+                            }
+                        } else {
+                            plugin.getLogger().warning("[DEBUG] 8balls模式下GameState为null");
+                        }
+                    } else {
+                        // 标准模式显示分数
+                        for (Player p : playersInWorld) {
+                            int s = org.tableBall.Manager.RoundManager.scores.getOrDefault(p.getName(), 0);
+                            worldPlayer.sendMessage("§b" + p.getName() + ": §a" + s);
+//                            plugin.getLogger().info("[DEBUG] 显示玩家 " + p.getName() + " 的分数: " + s);
+                        }
+                    }
+
+                    // 判定对方获胜（弃权）
+                    if (opponent != null) {
+                        worldPlayer.sendMessage("§6获胜者：" + opponent.getName() + " (对方弃权)");
+                    } else {
+                        worldPlayer.sendMessage("§6游戏结束：对手已退出");
+                    }
+                    worldPlayer.sendMessage("§a你已被传送回主城！");
+                }
+
+                // 结束游戏
+//                plugin.getLogger().info("[DEBUG] 调用endGameForRealLikeDeepseekSTFU结束游戏");
+                org.tableBall.Commands.LeaveCommand.endGameForRealLikeDeepseekSTFU(world);
+//                plugin.getLogger().info("[DEBUG] endGameForRealLikeDeepseekSTFU调用完成");
+            } else {
+                plugin.getLogger().severe("[DEBUG] 无法获取世界对象: " + worldName + "，无法结束游戏！");
+            }
+        } else {
+//            plugin.getLogger().info("[DEBUG] 玩家 " + player.getName() + " 没有对局标签，按观战者处理");
+            // 玩家不在对局中，只是在观战，直接移除
+            inGame.removePlayer(player);
+        }
     }
 
     private static Material getMaterialOfMotherBall() {
@@ -426,11 +428,36 @@ public class EntityEventListener implements Listener {
 
             // 显示个人信息
             showPersonalInfo(player);
+            // 播放打开音效
+            player.playSound(player.getLocation(), Sound.BLOCK_CHEST_OPEN, 1.0f, 1.0f);
             event.setCancelled(true);
         }
     }
 
+    @EventHandler
+    public void onPlayerInteractQuickQuit(PlayerInteractEvent event){
+        if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
 
+        Player player = event.getPlayer();
+        ItemStack item = player.getInventory().getItemInMainHand();
+
+        if (item == null || item.getType() != Material.RED_BED) return;
+
+        // 检查是否是快速回到主城物品
+        if (item.hasItemMeta() && item.getItemMeta().getPersistentDataContainer()
+                .has(new NamespacedKey(plugin, "quick_quit"), PersistentDataType.BYTE)) {
+
+            // 检查玩家是否在主城
+            String lobbyWorld = plugin.getConfig().getString("lobby-world", "world");
+            if (!player.getWorld().getName().equals(lobbyWorld)) {
+                return; // 不在主城，不处理
+            }
+
+            // 执行指令
+            player.performCommand("hub");
+            event.setCancelled(true);
+        }
+    }
 
     @EventHandler
     public void onPlayerInteractDisplay(PlayerInteractAtEntityEvent event) {
@@ -466,15 +493,21 @@ public class EntityEventListener implements Listener {
             event.setCancelled(true);
             return;
         }
+        double knockbackLevel = mainHandItem.getEnchantmentLevel(Enchantment.KNOCKBACK);
+
+        player.playSound(
+                player.getLocation(),
+                Sound.BLOCK_NOTE_BLOCK_BASEDRUM,
+                (float) knockbackLevel * 0.4f,
+                1.0f
+        );
 
         // 计算击球方向
         Vector direction = player.getLocation().getDirection().normalize();
-        double knockbackLevel = mainHandItem.getEnchantmentLevel(Enchantment.KNOCKBACK);
         Vector velocity = direction.multiply(0.33 * (knockbackLevel + 1)).setY(0);
 
         // 应用速度（确保立即生效）
         ball.setVelocity(velocity);
-//        ball.updateMovement(1); // 强制更新位置
 
         // 有问题就删掉这个
         EntityEventListener.hasStrike = true;
@@ -498,31 +531,72 @@ public class EntityEventListener implements Listener {
      * @param player 玩家
      */
     private void showPersonalInfo(Player player) {
-        PlayerDataManager dataManager = plugin.getPlayerDataManager();
-        var statsMap = dataManager.getPlayerStats(player);
+        // 使用GUI显示个人信息
+        org.tableBall.GUI.PersonalInfoGUI personalInfoGUI = new org.tableBall.GUI.PersonalInfoGUI((TableBall) plugin);
+        personalInfoGUI.openPersonalInfoGUI(player);
+    }
 
-        player.sendMessage("§a个人信息：");
+    /**
+     * 检查玩家是否应该被限制物品操作
+     * @param player 玩家
+     * @return 如果应该限制返回true
+     */
+    private boolean shouldRestrictItemOperations(Player player) {
+        String lobbyWorld = plugin.getConfig().getString("lobby-world", "world");
+        boolean isInLobby = player.getWorld().getName().equals(lobbyWorld);
+        boolean isInGame = player.getScoreboardTags().contains("tableball_ingame");
+        return isInLobby || isInGame;
+    }
 
-        if (statsMap.isEmpty()) {
-            player.sendMessage("§7暂无游戏记录");
+    @EventHandler
+    public void onInventoryClick(InventoryClickEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player)) return;
+
+        // 检查是否是个人信息GUI，如果是则不处理（由专门的监听器处理）
+        String title = event.getView().getTitle();
+        if (org.tableBall.GUI.PersonalInfoGUI.isPersonalInfoGUI(title)) {
             return;
         }
 
-        // 按照指定格式输出每个模式的信息
-        for (var entry : statsMap.entrySet()) {
-            String gameMode = entry.getKey();
-            PlayerDataManager.PlayerStats stats = entry.getValue();
+        // 如果玩家在主城或游戏中，禁止移动物品
+        if (shouldRestrictItemOperations(player) && !EditModeCommand.isEditMode()) {
+            event.setCancelled(true);
+        }
+    }
 
-            player.sendMessage("§f\"" + gameMode + "\" 的总次数: " + stats.getTotalGames() +
-                             " (游玩该模式的总次数)");
-            player.sendMessage("§f\"" + gameMode + "\" 的获胜次数: " + stats.getWins() +
-                             " (游玩该模式的获胜次数)");
-            player.sendMessage("§f\"" + gameMode + "\" 的失败次数:");
-            player.sendMessage("§f    个人弃权: " + stats.getForfeitLosses() +
-                             " (弃权而输的次数)");
-            player.sendMessage("§f    对方获胜: " + stats.getOpponentWins() +
-                             " (对方战胜的次数)");
-            player.sendMessage(""); // 空行分隔
+    @EventHandler
+    public void onInventoryDrag(InventoryDragEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player)) return;
+
+        // 检查是否是个人信息GUI，如果是则不处理（由专门的监听器处理）
+        String title = event.getView().getTitle();
+        if (org.tableBall.GUI.PersonalInfoGUI.isPersonalInfoGUI(title)) {
+            return;
+        }
+
+        // 如果玩家在主城或游戏中，禁止拖拽物品
+        if (shouldRestrictItemOperations(player) && !EditModeCommand.isEditMode()) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler
+    public void onPlayerDropItem(PlayerDropItemEvent event) {
+        Player player = event.getPlayer();
+
+        // 如果玩家在主城或游戏中，禁止丢弃物品
+        if (shouldRestrictItemOperations(player) && !EditModeCommand.isEditMode()) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler
+    public void onPlayerSwapHandItems(PlayerSwapHandItemsEvent event) {
+        Player player = event.getPlayer();
+
+        // 如果玩家在主城或游戏中，禁止交换主副手物品
+        if (shouldRestrictItemOperations(player) && !EditModeCommand.isEditMode()) {
+            event.setCancelled(true);
         }
     }
 
@@ -547,5 +621,17 @@ public class EntityEventListener implements Listener {
             }
         }
         return highestLevel;
+    }
+
+    @EventHandler
+    private void onPlayerDamage(EntityDamageEvent e){
+        if(e.getEntity() instanceof Player p && e.getCause() == EntityDamageEvent.DamageCause.VOID){
+            for(DisplayBall ball : instance.getInGame().getBalls(p.getWorld().getName())){
+                p.teleport(ball.location.clone().add(0, 1, 0));
+                break;
+            }
+            p.sendMessage("§c检测到你掉入虚空，已将你随机传送到场上的一颗球！");
+            e.setCancelled(true);
+        }
     }
 }

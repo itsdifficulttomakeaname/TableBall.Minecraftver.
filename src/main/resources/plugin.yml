@@ -14,16 +14,25 @@ commands:
     description: 离开当前游戏并返回大厅
     usage: /leave
   acceptinvite:
-    description: 接受TableBall游戏邀请
-    usage: /acceptinvite
+    description: 接受指定玩家的TableBall游戏邀请
+    usage: /acceptinvite <玩家名>
     permission: tableball.invite
   editmode:
     description: 切换编辑模式
-    usage: /<command> <enable/disable/info>
+    usage: /editmode <enable/disable/info>
     permission: tableball.editmode
   spectategame:
     description: 观战
     usage: /spectategame
+  quickmenu:
+    description: 打开台球快捷菜单
+    usage: /quickmenu
+    aliases: [qm]
+  teleporttowhiteball:
+    description: 在游戏中快速传送到母球旁
+    usage: /teleporttowhiteball
+    permission: tableball.teleporttowhiteball
+    aliases: [tpwb]
 
 permissions:
   tableball.invite:
@@ -32,9 +41,13 @@ permissions:
   tableball.leave:
     description: 允许使用/leave命令
     default: true
+  tableball.teleporttowhiteball:
+    description: 允许玩家使用/teleporttowhiteball指令
+    default: true
   tableball.admin:
     description: 给予所有TableBall权限
     default: op
     children:
       tableball.invite: true
       tableball.leave: true
+      tableball.debug: true

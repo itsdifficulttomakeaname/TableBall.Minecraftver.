@@ -1,9 +1,6 @@
 package org.tableBall.Game;
 
-import org.bukkit.Bukkit;
-import org.bukkit.Location;
-import org.bukkit.Material;
-import org.bukkit.World;
+import org.bukkit.*;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -55,14 +52,14 @@ public class InGame {
      * 从配置文件加载球的数据（适配新格式：balls和holes为同级键）
      */
     private void loadBalls() {
-        plugin.getLogger().info("开始加载球的数据...");
+        // 开始加载球的数据
         ConfigurationSection worlds = ballsConfig.getConfigurationSection("");
         if (worlds == null) {
             plugin.getLogger().severe("balls.yml 中没有找到任何世界配置！");
             return;
         }
         for (String worldName : worlds.getKeys(false)) {
-            plugin.getLogger().info("正在加载世界 " + worldName + " 的球数据...");
+            // 正在加载世界的球数据
             ConfigurationSection worldSection = worlds.getConfigurationSection(worldName);
             if (worldSection == null) {
                 plugin.getLogger().severe("世界 " + worldName + " 的配置部分无效！");
@@ -75,7 +72,7 @@ public class InGame {
             }
             Map<String, BallData> balls = new HashMap<>();
             for (String ballKey : ballsSection.getKeys(false)) {
-                plugin.getLogger().info("正在加载球 ID: " + ballKey);
+                // 正在加载球 ID
                 ConfigurationSection ballSection = ballsSection.getConfigurationSection(ballKey);
                 if (ballSection == null) {
                     plugin.getLogger().severe("球 " + ballKey + " 的配置部分无效！");
@@ -107,21 +104,21 @@ public class InGame {
             worldBalls.put(worldName, balls);
             //plugin.getLogger().info("世界 " + worldName + " 的球数据加载完成，共 " + balls.size() + " 个球");
         }
-        plugin.getLogger().info("所有球的数据加载完成！");
+        // 所有球的数据加载完成
     }
 
     /**
      * 加载洞的位置（适配新格式：balls和holes为同级键）
      */
     private void loadHoles() {
-        plugin.getLogger().info("开始加载洞的数据...");
+        // 开始加载洞的数据
         ConfigurationSection worlds = ballsConfig.getConfigurationSection("");
         if (worlds == null) {
             plugin.getLogger().severe("balls.yml 中没有找到任何世界配置！");
             return;
         }
         for (String worldName : worlds.getKeys(false)) {
-            plugin.getLogger().info("正在加载世界 " + worldName + " 的洞数据...");
+            // 正在加载世界的洞数据
             ConfigurationSection worldSection = worlds.getConfigurationSection(worldName);
             if (worldSection == null) {
                 plugin.getLogger().severe("世界 " + worldName + " 的配置部分无效！");
@@ -135,7 +132,7 @@ public class InGame {
             Map<String, HoleData> holes = new HashMap<>();
             for (String holeId : holesSection.getKeys(false)) {
                 if (holeId.equals("y")) continue;
-                plugin.getLogger().info("正在加载洞 ID: " + holeId);
+                // 正在加载洞 ID
                 ConfigurationSection holeSection = holesSection.getConfigurationSection(holeId);
                 if (holeSection == null) {
                     plugin.getLogger().severe("洞 " + holeId + " 的配置部分无效！");
@@ -159,7 +156,7 @@ public class InGame {
             worldHoles.put(worldName, holes);
             //plugin.getLogger().info("世界 " + worldName + " 的洞数据加载完成，共 " + holes.size() + " 个洞");
         }
-        plugin.getLogger().info("所有洞的数据加载完成！");
+        // 所有洞的数据加载完成
     }
 
     /**
@@ -220,8 +217,8 @@ public class InGame {
             
             DisplayBall ball = new DisplayBall(loc, material, name, isMotherBallKey(ballId));
             addBall(worldName, ball);
-            
-            plugin.getLogger().info("球 ID: " + ballId + " 生成完成！");
+
+            // 球生成完成
         } catch (Exception e) {
             plugin.getLogger().severe("生成球时发生错误！");
             plugin.getLogger().severe("错误信息: " + e.getMessage());
@@ -311,10 +308,11 @@ public class InGame {
                 break;
             }
         }
-
-//        if (allStatic) {
-//            plugin.getRoundManager().settleTurn(worldName);
-//        }
+        /*
+        if(DisplayBall.getIsFalling()) {
+            allStatic = false;
+        }
+        */
 
         return allStatic;
     }
@@ -332,6 +330,9 @@ public class InGame {
                 if (gameType.equals("8balls")) {
                     int ballNumber = extractBallNumberFromDisplayBall(ball);
                     plugin.getRoundManager().handle8ballsIn(worldName, ballNumber);
+                    if(ballNumber != 8 && ballNumber != 0){
+                        GameState.setIsOtherBallInHole(true);
+                    }
                 } else {
                     plugin.getRoundManager().handleBallIn(worldName, ball.isMotherBall);
                 }
@@ -347,7 +348,7 @@ public class InGame {
      */
     public int extractBallNumberFromDisplayBall(DisplayBall ball) {
         if (ball.isMotherBall) {
-            plugin.getLogger().info("球号提取: 母球，返回0");
+            // 球号提取: 母球
             return 0; // 母球
         }
 
@@ -355,7 +356,7 @@ public class InGame {
         String name = ball.text;
         if (name != null) {
             int ballNumber = extractBallNumberFromText(name);
-            plugin.getLogger().info("球号提取: 文本='" + name + "', 提取结果=" + ballNumber);
+            // 球号提取完成
             return ballNumber;
         }
         plugin.getLogger().warning("球号提取失败: 球文本为null");
@@ -631,7 +632,7 @@ public class InGame {
             gameData.getRounds().put(player, 1);
         }
         gameDataMap.put(worldName, gameData);
-        plugin.getLogger().info("设置游戏数据: 世界=" + worldName + ", 类型=" + gameType + ", 玩家数=" + players.size());
+        // 设置游戏数据完成
     }
 
     /**
@@ -753,7 +754,7 @@ public class InGame {
         DisplayBall motherBall = getMotherBall(worldName);
         if (motherBall != null) {
             motherBall.destroy();
-            plugin.getLogger().info("移除母球: 世界=" + worldName);
+            // 移除母球
         }
     }
 
@@ -876,6 +877,42 @@ public class InGame {
 
     public void setMotherBall(String worldName, DisplayBall ball) {
         motherBalls.put(worldName, ball);
+    }
+
+    /**
+     * 为8balls模式的所有球设置发光效果
+     * @param worldName 世界名称
+     */
+    public void setGlowingFor8ballsMode(String worldName) {
+        Set<DisplayBall> worldBalls = balls.get(worldName);
+        if (worldBalls == null) return;
+
+        for (DisplayBall ball : worldBalls) {
+            // 从球的文本中提取球号
+            int ballNumber = extractBallNumberFromDisplayBall(ball);
+            setGlowingFor8balls(ball, ballNumber);
+        }
+
+        // 已为8balls模式设置球的发光效果
+    }
+
+    /**
+     * 为8balls模式的球设置发光效果
+     * @param ball 球对象
+     * @param ballNumber 球号
+     */
+    private void setGlowingFor8balls(DisplayBall ball, int ballNumber) {
+        if (ballNumber >= 1 && ballNumber <= 7) {
+            // 1-7号球发红色光
+            ball.setGlowing(ChatColor.RED);
+        } else if (ballNumber >= 9 && ballNumber <= 15) {
+            // 9-15号球发蓝色光
+            ball.setGlowing(ChatColor.BLUE);
+        } else if (ballNumber == 8) {
+            // 8号球发白色光
+            ball.setGlowing(ChatColor.WHITE);
+        }
+        // 0号球（母球）不设置发光效果
     }
 
     /**

@@ -8,6 +8,7 @@ import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
 import org.tableBall.Entity.DisplayBall;
 import org.tableBall.Manager.RoundManager;
+import org.tableBall.Manager.ScoreBoardManager;
 import org.tableBall.TableBall;
 import org.tableBall.Utils.WorldUtils;
 import org.tableBall.Utils.InventoryUtils;
@@ -51,6 +52,8 @@ public class Start {
         if (gameWorld == null) {
             gameWorld = worldUtils.createGameWorld(worldName);
         }
+
+        ScoreBoardManager.startTime = System.currentTimeMillis();
 
         // 清理场上所有实体（除了玩家）
         gameWorld.getEntities().forEach(entity -> {
@@ -110,6 +113,11 @@ public class Start {
         // 生成球
         inGame.spawnBalls(worldName);
 
+        // 如果是8balls模式，设置球的发光效果
+        if (gameType.equals("8balls")) {
+            inGame.setGlowingFor8ballsMode(worldName);
+        }
+
         currentGame = gameWorld;
 
         // 通知玩家
@@ -119,10 +127,15 @@ public class Start {
                 player.sendMessage("§e标准模式：每打进一个球得2分");
             } else if (gameType.equals("8balls")) {
                 player.sendMessage("§e8球模式：先打完自己的色球再打进黑8获胜");
-                player.sendMessage("§e由 " + players.get(0).getName() + " 开球");
+                // 获取开球玩家
+                org.tableBall.Game.GameState gameState = plugin.getRoundManager().getGameState(worldName);
+                if (gameState != null) {
+                    Player breakPlayer = gameState.getBreakPlayer();
+                    player.sendMessage("§e由 " + breakPlayer.getName() + " 开球");
+                }
             }
         }
-        plugin.getLogger().info("游戏初始化完成！");
+        // 游戏初始化完成
     }
 
 }

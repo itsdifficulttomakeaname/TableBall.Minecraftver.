@@ -2,6 +2,7 @@ package org.tableBall.Entity;
 
 import cn.jason31416.planetlib.PlanetLib;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
@@ -85,6 +86,36 @@ public class DisplayBall {
         displayBalls.add(this);
     }
 
+    /**
+     * 设置球的发光效果
+     * @param glowColor 发光颜色，null表示不发光
+     */
+    public void setGlowing(ChatColor glowColor) {
+        if (glowColor != null) {
+            blockDisplay.setGlowing(true);
+            blockDisplay.setGlowColorOverride(org.bukkit.Color.fromRGB(getColorFromChatColor(glowColor)));
+        } else {
+            blockDisplay.setGlowing(false);
+            blockDisplay.setGlowColorOverride(null);
+        }
+    }
+
+    /**
+     * 将ChatColor转换为RGB颜色值
+     */
+    private int getColorFromChatColor(ChatColor chatColor) {
+        return switch (chatColor) {
+            case RED -> 0xFF0000;      // 红色
+            case BLUE -> 0x0000FF;     // 蓝色
+            case WHITE -> 0xFFFFFF;    // 白色
+            case YELLOW -> 0xFFFF00;   // 黄色
+            case GREEN -> 0x00FF00;    // 绿色
+            case AQUA -> 0x00FFFF;     // 青色
+            case LIGHT_PURPLE -> 0xFF00FF; // 紫色
+            default -> 0xFFFFFF;       // 默认白色
+        };
+    }
+
     public void destroy() {
         blockDisplay.remove();
         interactor.remove();
@@ -121,14 +152,14 @@ public class DisplayBall {
             if(plugin.getInGame().ballsConfig.getInt(worldName + ".holes.y") >= location.getY()){
                 // 检查游戏类型以决定使用哪种进球处理方法
                 String gameType = plugin.getInGame().getGameType(worldName);
-                plugin.getLogger().info("球进洞: 世界=" + worldName + ", 游戏类型=" + gameType + ", 球=" + text);
+                // 球进洞处理
 
                 if ("8balls".equals(gameType)) {
                     int ballNumber = plugin.getInGame().extractBallNumberFromDisplayBall(this);
-                    plugin.getLogger().info("8balls模式进球: 球号=" + ballNumber);
+                    // 8balls模式进球处理
                     plugin.getRoundManager().handle8ballsIn(worldName, ballNumber);
                 } else {
-                    plugin.getLogger().info("标准模式进球: 母球=" + isMotherBall);
+                    // 标准模式进球处理
                     plugin.getRoundManager().handleBallIn(worldName, isMotherBall);
                 }
                 destroy();
@@ -165,6 +196,16 @@ public class DisplayBall {
             }
 
             // 假设x2>x1, z2>z1
+            if(x1>x2){
+                int tmp=x2;
+                x2=x1;
+                x1=tmp;
+            }
+            if(z1>z2){
+                int tmp=z2;
+                z2=z1;
+                z1=tmp;
+            }
             // 碰壁检测
             boolean hitWall = false;
             if (location.getX()+0.25/*校准值0.25*/ < x1) {
@@ -240,17 +281,6 @@ public class DisplayBall {
                 isFalling = true;
                 velocity.setY(-0.07).setX(0).setZ(0);
             }
-
-            /*
-            if (hx1 < location.getX()-radius && hx2 > location.getX()-radius &&
-                    hz1 < location.getZ()-radius && hz2 > location.getZ()-radius &&
-                    hx1 < location.getX()+radius && hx2 > location.getX()+radius &&
-                    hz1 < location.getZ()+radius && hz2 > location.getZ()+radius ) {
-                isFalling = true;
-                velocity.setY(-0.07).setX(0).setZ(0);
-            }
-
-             */
         }
     }
 
@@ -266,9 +296,5 @@ public class DisplayBall {
     public String getWorld(){
         return location != null && location.getWorld() != null ? 
                location.getWorld().getName() : null;
-    }
-
-    public boolean getIsFalling() {
-        return this.isFalling;
     }
 } 

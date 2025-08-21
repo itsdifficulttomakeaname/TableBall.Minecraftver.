@@ -13,8 +13,11 @@ import org.tableBall.Game.End;
 import org.tableBall.Manager.RoundManager;
 import org.tableBall.Listeners.EntityEventListener;
 import org.tableBall.Listeners.BlockEventListener;
+import org.tableBall.Listeners.QuickMenuListener;
+import org.tableBall.Listeners.InventoryItemListener;
 import org.tableBall.Manager.ScoreBoardManager;
 import org.tableBall.Manager.PlayerDataManager;
+import org.tableBall.Manager.PlayerSettingsManager;
 import org.tableBall.Utils.WorldUtils;
 
 import java.io.File;
@@ -32,6 +35,7 @@ public final class TableBall extends JavaPlugin {
     private RoundManager roundManager;
     private EntityEventListener entityEventListener;
     private PlayerDataManager playerDataManager;
+    private PlayerSettingsManager playerSettingsManager;
     private GameState gamestate;
 
     @Override
@@ -42,7 +46,6 @@ public final class TableBall extends JavaPlugin {
         // 保存默认配置
         saveDefaultConfig();
         saveResource("balls.yml", false);
-        saveResource("scoreboard.yml", false);
 
         // 初始化DisplayBall的静态plugin字段
         DisplayBall.plugin = this;
@@ -51,6 +54,7 @@ public final class TableBall extends JavaPlugin {
         this.worldUtils = new WorldUtils(this);
         this.scoreBoardManager = new ScoreBoardManager(this);
         this.playerDataManager = new PlayerDataManager(this);
+        this.playerSettingsManager = new PlayerSettingsManager(this);
         this.inGame = new InGame(this, worldUtils);
         this.end = new End(this, scoreBoardManager);
         this.roundManager = new RoundManager(this);
@@ -63,37 +67,26 @@ public final class TableBall extends JavaPlugin {
                 sender.sendMessage("§c只有玩家才能使用此命令！");
                 return true;
             }
-            return org.tableBall.Commands.InviteCommand.handleAcceptInvite((org.bukkit.entity.Player) sender, this);
+            
+            org.bukkit.entity.Player player = (org.bukkit.entity.Player) sender;
+            String inviterName = (args.length > 0) ? args[0] : null;
+            return org.tableBall.Commands.InviteCommand.handleAcceptInvite(player, this, inviterName);
         });
         getCommand("editmode").setExecutor(new EditModeCommand(this));
-        getCommand("spectategame").setExecutor(new SpectateCommand());
+        getCommand("spectategame").setExecutor(new SpectateCommand(this));
+        getCommand("quickmenu").setExecutor(new QuickMenuCommand(this));
+        getCommand("teleporttowhiteball").setExecutor(new TeleportToWhiteBallCommand(this));
 
         // 注册监听器
         EntityEventListener entityEventListener = new EntityEventListener(this, inGame);
         getServer().getPluginManager().registerEvents(entityEventListener, this);
         getServer().getPluginManager().registerEvents(new BlockEventListener(this), this);
+        getServer().getPluginManager().registerEvents(new QuickMenuListener(this), this);
+        getServer().getPluginManager().registerEvents(new InventoryItemListener(this), this);
+        getServer().getPluginManager().registerEvents(new org.tableBall.Listeners.PersonalInfoGUIListener(this), this);
         setEntityEventListener(entityEventListener);
 
         // 注册桌球物理管理器
-        /*
-        PlanetLib.getScheduler().runTimer(t->{
-            if(DisplayBall.displayBalls.isEmpty()) return;
-            String world = DisplayBall.displayBalls.stream().findFirst().get().getWorld();
-            int amount = 4;
-            for(int i=0;i<amount;i++) {
-                DisplayBall.displayBalls.forEach(d->d.updateMovement(amount));
-                EntityEventListener.checkCollisions();
-            }
-
-            outer: if(EntityEventListener.hasStrike) {
-                for(DisplayBall i: DisplayBall.displayBalls){
-                    if(i.velocity.length() > 0.001) break outer;
-                }
-                getRoundManager().settleTurn(world);
-                EntityEventListener.hasStrike = false;
-            }
-        }, 1, 1);
-         */
         PlanetLib.getScheduler().runTimer(t->{
             if(DisplayBall.displayBalls.isEmpty()) return;
             String world = DisplayBall.displayBalls.stream().findFirst().get().getWorld();
@@ -127,6 +120,9 @@ public final class TableBall extends JavaPlugin {
         // 关闭数据库连接
         if (playerDataManager != null) {
             playerDataManager.closeConnection();
+        }
+        if (playerSettingsManager != null) {
+            playerSettingsManager.closeConnection();
         }
         getLogger().info("TableBall 插件已禁用！");
     }
@@ -166,4 +162,10 @@ public final class TableBall extends JavaPlugin {
     public PlayerDataManager getPlayerDataManager() {
         return playerDataManager;
     }
+
+    public PlayerSettingsManager getPlayerSettingsManager() {
+        return playerSettingsManager;
+    }
 }
+
+// todo 2结束时黑球与其他任何一个球或多个球（包括母球或色球）都判为己方输对方赢

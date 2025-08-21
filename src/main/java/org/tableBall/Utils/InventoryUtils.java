@@ -22,6 +22,19 @@ public class InventoryUtils {
     }
 
     /**
+     * 静态方法：检查物品是否是快捷菜单物品
+     */
+    public static boolean isQuickMenuItem(ItemStack item, JavaPlugin plugin) {
+        if (item == null || !item.hasItemMeta()) return false;
+        
+        ItemMeta meta = item.getItemMeta();
+        if (meta == null) return false;
+        
+        PersistentDataContainer pdc = meta.getPersistentDataContainer();
+        return pdc.has(new NamespacedKey(plugin, "quick_menu"), PersistentDataType.BYTE);
+    }
+
+    /**
      * 安全设置玩家物品栏物品
      * @return 是否设置成功
      */
@@ -161,7 +174,24 @@ public class InventoryUtils {
         // 清空物品栏
         player.getInventory().clear();
 
-        // 创建个人信息物品（下届之星，第五格，索引4）
+        // 创建快捷菜单物品（钟表，第一格，索引0）
+        ItemStack quickMenuItem = new ItemStack(Material.CLOCK);
+        ItemMeta clockMeta = quickMenuItem.getItemMeta();
+        if (clockMeta != null) {
+            clockMeta.setDisplayName("§6快捷菜单(右键打开)");
+            clockMeta.setLore(Arrays.asList("§e右键打开台球快捷菜单", "§7快速邀请玩家对战"));
+
+            // 添加自定义NBT标记
+            PersistentDataContainer pdc = clockMeta.getPersistentDataContainer();
+            pdc.set(new NamespacedKey(plugin, "quick_menu"), PersistentDataType.BYTE, (byte) 1);
+
+            quickMenuItem.setItemMeta(clockMeta);
+        }
+
+        // 设置到第一格（索引0）
+        safeSetItem(player, 0, quickMenuItem);
+
+        // 创建个人信息物品（下界之星，第五格，索引4）
         ItemStack personalInfoItem = new ItemStack(Material.NETHER_STAR);
         ItemMeta meta = personalInfoItem.getItemMeta();
         if (meta != null) {
@@ -177,5 +207,21 @@ public class InventoryUtils {
 
         // 设置到第五格（索引4）
         safeSetItem(player, 4, personalInfoItem);
+
+        // 创建快捷回到大厅物品（默认执行指令hub）
+        ItemStack quickBackToHall = new ItemStack(Material.RED_BED);
+        ItemMeta bedMeta = quickBackToHall.getItemMeta();
+        if(bedMeta != null){
+            bedMeta.setDisplayName("§a回到大厅(右键)");
+
+            // 添加自定义NBT标记
+            PersistentDataContainer pdc = bedMeta.getPersistentDataContainer();
+            pdc.set(new NamespacedKey(plugin, "quick_quit"), PersistentDataType.BYTE, (byte) 1);
+
+            quickBackToHall.setItemMeta(bedMeta);
+        }
+
+        // 设置到第九格（索引8）
+        safeSetItem(player, 8, quickBackToHall);
     }
 }
